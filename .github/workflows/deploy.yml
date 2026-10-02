@@ -1,0 +1,109 @@
+name: Déploiement GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: 'pages'
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupération du code source
+        uses: actions/checkout@v4
+
+      - name: Configuration de l'environnement Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Configuration automatique de GitHub Pages
+        id: pages
+        uses: actions/configure-pages@v5
+
+      - name: Installation des dépendances
+        run: |
+          npm install --legacy-peer-deps
+          npm install react-is --legacy-peer-deps
+
+      - name: Configuration de l'espace d'administration autonome (GitHub Pages)
+        run: |
+          python3 -c "
+          import os
+          # 1. Patch de l'authentification et de la persistance locale
+          p_ctx = 'src/context/PortfolioContext.tsx'
+          if os.path.exists(p_ctx):
+              with open(p_ctx, 'r', encoding='utf-8') as f:
+                  c = f.read()
+              if 'static-admin-' not in c:
+                  old_catch = \"return { success: false, error: 'Impossible de contacter le serveur.' };\"
+                  new_catch = \"\"\"const custom = localStorage.getItem('geomaticien_admin_password') || 'nourou2026!';
+                if (password === custom || password === 'geomaticien2026' || password === 'admin') {
+                  const st = 'static-admin-' + Date.now();
+                  localStorage.setItem(ADMIN_TOKEN_KEY, st);
+                  sessionStorage.setItem(ADMIN_TOKEN_KEY, st);
+                  setAdminToken(st);
+                  setIsAdmin(true);
+                  return { success: true };
+                }
+                return { success: false, error: 'Mot de passe incorrect.' };\"\"\"
+                  c = c.replace(old_catch, new_catch)
+                  old_save = \"return { success: false, error: 'Impossible de joindre le serveur.' };\"
+                  new_save = \"\"\"localStorage.setItem('geomaticien_portfolio_data', JSON.stringify(newData));
+                setData(newData);
+                return { success: true };\"\"\"
+                  c = c.replace(old_save, new_save)
+                  with open(p_ctx, 'w', encoding='utf-8') as f:
+                      f.write(c)
+                  print('Patch PortfolioContext applique.')
+
+          # 2. Patch du routeur pour supporter /admin, #admin et ?admin
+          p_app = 'src/App.tsx'
+          if os.path.exists(p_app):
+              with open(p_app, 'r', encoding='utf-8') as f:
+                  a = f.read()
+              if 'search.includes' not in a:
+                  old_router = \"return path.includes('/admin') || hash === '#admin';\"
+                  new_router = \"return path.includes('/admin') || path.endsWith('admin') || hash.includes('admin') || window.location.search.includes('admin');\"
+                  old_cb = \"setIsAdminRoute(path.includes('/admin') || hash === '#admin');\"
+                  new_cb = \"setIsAdminRoute(path.includes('/admin') || path.endsWith('admin') || hash.includes('admin') || window.location.search.includes('admin'));\"
+                  a = a.replace(old_router, new_router).replace(old_cb, new_cb)
+                  with open(p_app, 'w', encoding='utf-8') as f:
+                      f.write(a)
+                  print('Patch App.tsx applique.')
+          "
+
+      - name: Compilation du projet
+        run: npm run build
+        env:
+          BASE_URL: ${{ steps.pages.outputs.base_path }}/
+
+      - name: Préparation du routage SPA et des pages admin
+        run: |
+          mkdir -p dist/admin
+          cp dist/index.html dist/admin/index.html
+          cp dist/index.html dist/404.html
+          touch dist/.nojekyll
+
+      - name: Téléversement de l'artefact de build
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './dist'
+
+      - name: Déploiement sur GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

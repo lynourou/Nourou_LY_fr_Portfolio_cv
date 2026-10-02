@@ -1,0 +1,6 @@
+{
+  "name": "Portfolio Géomaticien | SIG & Télédétection",
+  "description": "Portfolio professionnel pour géomaticien et analyste SIG : cartographie, analyse spatiale, télédétection, données géographiques et travaux de terrain.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

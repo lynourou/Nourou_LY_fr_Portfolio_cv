@@ -1,0 +1,60 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+6 0 obj
+<< /Length 2432 >>
+stream
+BT /F1 14 Tf 50 780 Td (NOUROU LY - GEOMATICIEN) Tj ET
+BT /F2 10 Tf 50 762 Td (Email: lynourou12@gmail.com | Tel: +221 77 670 60 35 | Senegal) Tj ET
+BT /F1 9 Tf 50 750 Td (--------------------------------------------------------------------------------) Tj ET
+BT /F1 11 Tf 50 730 Td (PROFIL PROFESSIONNEL) Tj ET
+BT /F2 9.5 Tf 50 716 Td (Geomaticien specialise en SIG, cartographie numerique, teledetection,) Tj ET
+BT /F2 9.5 Tf 50 704 Td (bases de donnees spatiales \(PostGIS\), analyse spatiale et collecte terrain \(QField, GPS\).) Tj ET
+BT /F1 11 Tf 50 684 Td (FORMATION ACADEMIQUE) Tj ET
+BT /F2 9.5 Tf 50 670 Td (* BTS en Geomatique - CEDT Le G15, Dakar \(2024 - 2026\)) Tj ET
+BT /F2 9.5 Tf 50 658 Td (  Memoire: Apport de la geomatique a la gestion de la foret classee de Mbao \(136 p.\)) Tj ET
+BT /F2 9.5 Tf 50 646 Td (* BTS en Metallurgie - San Jose Obrero \(2019 - 2021\)) Tj ET
+BT /F2 9.5 Tf 50 634 Td (* Ingenierie Industrielle \(Licence I\) - UNGE \(2020 - 2021\)) Tj ET
+BT /F2 9.5 Tf 50 622 Td (* Baccalaureat en Technologies - Nuestra Senora de Bisila \(2017 - 2019\)) Tj ET
+BT /F1 11 Tf 50 602 Td (EXPERIENCES ET PROJETS CLES) Tj ET
+BT /F2 9.5 Tf 50 588 Td (* Direction des Eaux et Forets \(DEFCCS Mbour\) - Collecte terrain & Reboisement \(2026\)) Tj ET
+BT /F2 9.5 Tf 50 576 Td (  Releves GPS/QField, delimitation de parcelles forestieres, pepinieres et triages.) Tj ET
+BT /F2 9.5 Tf 50 564 Td (* Mastercom Dakar - Stage Geomatique & SIG securite publique \(2025\)) Tj ET
+BT /F2 9.5 Tf 50 552 Td (  Geocodage, bases de donnees spatiales, cartographie thematique et analyse spatiale.) Tj ET
+BT /F2 9.5 Tf 50 540 Td (* Application GEOFORET SENEGAL \(2026\) - Flutter & MapLibre pour gestion forestiere) Tj ET
+BT /F2 9.5 Tf 50 528 Td (* Plateforme Cartographique des Centres FPT Dakar \(2026\) - 190 etablissements) Tj ET
+BT /F1 11 Tf 50 508 Td (COMPETENCES TECHNIQUES) Tj ET
+BT /F2 9.5 Tf 50 494 Td (* SIG & Cartographie: QGIS, ArcGIS Pro, ArcMap, ArcScene, Semiologie graphique) Tj ET
+BT /F2 9.5 Tf 50 482 Td (* Teledetection: Sentinel-2, Landsat \(5 TM, 8 OLI\), Indices spectraux \(EVI, MNDWI, BSI\)) Tj ET
+BT /F2 9.5 Tf 50 470 Td (* Bases de donnees spatiales: PostgreSQL, PostGIS, GeoPackage, GeoJSON) Tj ET
+BT /F2 9.5 Tf 50 458 Td (* Collecte terrain: QField, GPS, RTK, Mobile Topographer, Locus Map, KoboCollect) Tj ET
+BT /F2 9.5 Tf 50 446 Td (* Webmapping & Dev: Leaflet, MapLibre, Flutter, Dart, Python) Tj ET
+endstream
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000244 00000 n 
+0000000332 00000 n 
+0000000415 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+2932
+%%EOF
