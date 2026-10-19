@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { useTheme } from '../context/ThemeContext';
 import { scrollToSection } from '../utils/helpers';
-import { Menu, X, FileText, Compass, Sun, Moon, QrCode } from 'lucide-react';
+import { Menu, X, FileText, Compass, Sun, Moon, QrCode, Lock } from 'lucide-react';
 
 interface NavbarProps {
   onDownloadCv: () => void;
@@ -109,6 +109,20 @@ export const Navbar: React.FC<NavbarProps> = ({ onDownloadCv, onOpenContactCard 
             <FileText className="w-3.5 h-3.5 text-emerald-400 dark:text-white" />
             <span>Télécharger mon CV</span>
           </button>
+
+          {/* Accès Administration */}
+          <a
+            href="#admin"
+            onClick={() => {
+              window.location.hash = 'admin';
+            }}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:text-emerald-700 dark:hover:text-emerald-400 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md transition-colors shadow-xs whitespace-nowrap"
+            title="Accéder à l'espace d'administration"
+            aria-label="Accéder à l'espace d'administration"
+          >
+            <Lock className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            <span>Admin</span>
+          </a>
         </div>
 
         {/* Mobile Hamburger Toggle & Theme Switch */}
@@ -168,6 +182,18 @@ export const Navbar: React.FC<NavbarProps> = ({ onDownloadCv, onOpenContactCard 
               <FileText className="w-4 h-4 text-emerald-400 dark:text-white" />
               <span>Télécharger mon CV (PDF)</span>
             </button>
+
+            <a
+              href="#admin"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                window.location.hash = 'admin';
+              }}
+              className="w-full flex items-center justify-center gap-2 py-2 px-4 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:text-emerald-600 dark:hover:text-emerald-400 bg-slate-100 dark:bg-slate-800 rounded-md border border-slate-200 dark:border-slate-700"
+            >
+              <Lock className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span>Espace d'administration</span>
+            </a>
           </div>
         </div>
       )}

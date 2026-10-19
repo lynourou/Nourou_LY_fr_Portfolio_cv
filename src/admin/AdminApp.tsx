@@ -387,6 +387,18 @@ export const AdminApp: React.FC = () => {
     }
   };
 
+  const handleExitAdmin = () => {
+    if (window.location.pathname.toLowerCase().includes('admin')) {
+      const target = window.location.pathname.replace(/\/admin(\.html|\/.*)?$/i, '') || './';
+      window.location.href = target.endsWith('/') ? target : target + '/';
+    } else {
+      window.location.hash = '';
+      window.location.search = '';
+      window.dispatchEvent(new Event('hashchange'));
+      window.dispatchEvent(new Event('popstate'));
+    }
+  };
+
   // =========================================================================
   // ÉCRAN 1 : FORMULAIRE DE CONNEXION SÉCURISÉ (SI NON AUTHENTIFIÉ)
   // =========================================================================
@@ -415,6 +427,37 @@ export const AdminApp: React.FC = () => {
             </div>
           )}
 
+          <div className="p-3 bg-slate-900/90 border border-slate-800 rounded-lg space-y-2">
+            <div className="text-[11px] font-semibold text-slate-300 flex items-center justify-between">
+              <span>Mots de passe initiaux autorisés :</span>
+              <span className="text-emerald-400 font-mono text-[10px]">Prêts à l'emploi</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setPasswordInput('nourou2026!');
+                  setLoginError(null);
+                }}
+                className="px-2.5 py-1 text-xs font-mono bg-slate-800 hover:bg-slate-700 text-emerald-300 hover:text-emerald-200 border border-slate-700 rounded transition-colors"
+                title="Cliquer pour insérer ce mot de passe"
+              >
+                nourou2026!
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPasswordInput('geomaticien2026');
+                  setLoginError(null);
+                }}
+                className="px-2.5 py-1 text-xs font-mono bg-slate-800 hover:bg-slate-700 text-emerald-300 hover:text-emerald-200 border border-slate-700 rounded transition-colors"
+                title="Cliquer pour insérer ce mot de passe"
+              >
+                geomaticien2026
+              </button>
+            </div>
+          </div>
+
           <form onSubmit={handleLoginSubmit} className="space-y-4">
             <div>
               <label className="block text-xs font-medium text-slate-300 mb-1.5">
@@ -427,7 +470,7 @@ export const AdminApp: React.FC = () => {
                   autoFocus
                   value={passwordInput}
                   onChange={(e) => setPasswordInput(e.target.value)}
-                  placeholder="••••••••••••"
+                  placeholder="nourou2026! ou geomaticien2026"
                   className="w-full pl-3.5 pr-10 py-2.5 text-sm bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent font-mono"
                 />
                 <button
@@ -454,12 +497,7 @@ export const AdminApp: React.FC = () => {
           <div className="pt-4 border-t border-slate-800 text-center">
             <button
               type="button"
-              onClick={() => {
-                window.location.hash = '';
-                if (window.location.pathname.includes('/admin')) {
-                  window.location.href = window.location.pathname.replace(/\/admin\/?$/, '') || './';
-                }
-              }}
+              onClick={handleExitAdmin}
               className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors cursor-pointer"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
@@ -498,12 +536,7 @@ export const AdminApp: React.FC = () => {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => {
-              window.location.hash = '';
-              if (window.location.pathname.includes('/admin')) {
-                window.location.href = window.location.pathname.replace(/\/admin\/?$/, '') || './';
-              }
-            }}
+            onClick={handleExitAdmin}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-200 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-md transition-colors cursor-pointer"
           >
             <Eye className="w-3.5 h-3.5 text-emerald-400" />

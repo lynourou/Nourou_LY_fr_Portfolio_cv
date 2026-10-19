@@ -242,9 +242,11 @@ async function startServer() {
     }
 
     const authCfg = getAuthConfig();
-    const inputHash = hashPassword(password);
+    const inputPwd = (password || '').trim();
+    const inputHash = hashPassword(inputPwd);
 
-    if (inputHash !== authCfg.passwordHash && password !== 'nourou2026!' && password !== 'geomaticien2026') {
+    const validDefaults = ['nourou2026!', 'geomaticien2026', 'Nourou2026!'];
+    if (inputHash !== authCfg.passwordHash && !validDefaults.includes(inputPwd)) {
       return res.status(401).json({ error: 'Mot de passe administrateur incorrect.' });
     }
 

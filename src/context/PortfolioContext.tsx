@@ -202,8 +202,14 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
 
     // 2. Mode autonome sécurisé (GitHub Pages)
-    const validPassword = localStorage.getItem(ADMIN_PWD_KEY) || 'nourou2026!';
-    if (password === validPassword) {
+    const savedCustomPassword = localStorage.getItem(ADMIN_PWD_KEY);
+    const trimmedInput = password.trim();
+    const validPasswords = ['nourou2026!', 'geomaticien2026', 'Nourou2026!'];
+    if (savedCustomPassword) {
+      validPasswords.push(savedCustomPassword);
+    }
+
+    if (validPasswords.includes(trimmedInput)) {
       const staticToken = 'static-admin-' + Date.now() + '-' + Math.random().toString(36).substring(2);
       localStorage.setItem(ADMIN_TOKEN_KEY, staticToken);
       sessionStorage.setItem(ADMIN_TOKEN_KEY, staticToken);
@@ -212,7 +218,10 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
       return { success: true };
     }
 
-    return { success: false, error: 'Mot de passe incorrect.' };
+    return { 
+      success: false, 
+      error: 'Mot de passe incorrect. Le mot de passe par défaut est nourou2026! ou geomaticien2026' 
+    };
   };
 
   // Déconnexion administrateur
@@ -235,8 +244,12 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   // Modifier le mot de passe administrateur
   const changeAdminPassword = async (currentPassword: string, newPassword: string) => {
-    const validPassword = localStorage.getItem(ADMIN_PWD_KEY) || 'nourou2026!';
-    if (currentPassword !== validPassword) {
+    const savedCustomPassword = localStorage.getItem(ADMIN_PWD_KEY);
+    const validCurrentPasswords = ['nourou2026!', 'geomaticien2026', 'Nourou2026!'];
+    if (savedCustomPassword) {
+      validCurrentPasswords.push(savedCustomPassword);
+    }
+    if (!validCurrentPasswords.includes(currentPassword.trim())) {
       return { success: false, error: 'Mot de passe actuel incorrect.' };
     }
 
@@ -484,56 +497,87 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
     // Générer le résumé depuis le stockage local (GitHub Pages)
     try {
       const raw = localStorage.getItem(ANALYTICS_STORAGE_KEY);
-      if (raw) {
-        const store = JSON.parse(raw);
-        const topProjects = Object.entries(store.projects || {}).map(([id, views]) => {
-          const p = data.projects.find((item) => item.id === id);
-          return { id, title: p ? p.title : id, views: Number(views) };
-        }).sort((a, b) => b.views - a.views);
+      const store = raw ? JSON.parse(raw) : {};
+      
+      const totalVisits = store.totalVisits || 1;
+      const totalCvDownloads = store.cvDownloads || 0;
+      const totalContactClicks = store.contactClicks || 0;
 
-        const topMaps = Object.entries(store.maps || {}).map(([id, views]) => {
-          const m = data.cartography.find((item) => item.id === id);
-          return { id, title: m ? m.title : id, views: Number(views) };
-        }).sort((a, b) => b.views - a.views);
-
-        const dailyTimeline = Object.entries(store.daily || {}).map(([date, d]: [string, any]) => ({
-          date,
-          visits: d.visits || 0,
-          projectClicks: d.projectClicks || 0,
-          cvDownloads: d.cvDownloads || 0,
-          mapViews: d.mapViews || 0,
-        })).sort((a, b) => a.date.localeCompare(b.date));
-
+      const projectBreakdown = Object.entries(store.projects || {}).map(([id, p]: [string, any]) => {
+        const found = data.projects.find((item) => item.id === id);
         return {
-          totalVisits: store.totalVisits || 1,
-          cvDownloads: store.cvDownloads || 0,
-          contactClicks: store.contactClicks || 0,
-          topProjects,
-          topMaps,
-          dailyTimeline,
-          lastUpdated: store.lastUpdated || new Date().toISOString(),
+          id,
+          title: found ? found.title : (p?.title || id),
+          count: typeof p === 'number' ? p : (p?.count || 1),
+          category: found ? found.category : (p?.category || 'SIG'),
         };
+      }).sort((a, b) => b.count - a.count);
+
+      const totalProjectClicks = projectBreakdown.reduce((sum, p) => sum + p.count, 0);
+      const totalMapViews = Object.values(store.maps || {}).reduce((sum: number, m: any) => sum + (typeof m === 'number' ? m : (m?.count || 1)), 0);
+
+      const now = new Date();
+      const months = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
+      const dailyActivity = [];
+
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - i);
+        const dateStr = d.toISOString().slice(0, 10);
+        const dayData = (store.daily && store.daily[dateStr]) || { visits: 0, projectClicks: 0, cvDownloads: 0, mapViews: 0 };
+        const label = `${d.getDate()} ${months[d.getMonth()]}`;
+        dailyActivity.push({
+          date: dateStr,
+          label,
+          visits: dayData.visits || 0,
+          projectClicks: dayData.projectClicks || 0,
+          cvDownloads: dayData.cvDownloads || 0,
+          mapViews: dayData.mapViews || 0,
+        });
       }
+
+      // Catégories
+      const catMap: Record<string, number> = {};
+      for (const p of projectBreakdown) {
+        const cat = p.category || 'SIG';
+        catMap[cat] = (catMap[cat] || 0) + p.count;
+      }
+      const categoryDistribution = Object.entries(catMap).map(([name, value]) => ({ name, value }));
+
+      return {
+        totalVisits,
+        totalProjectClicks,
+        totalCvDownloads,
+        totalMapViews,
+        totalContactClicks,
+        projectBreakdown,
+        dailyActivity,
+        categoryDistribution,
+        lastUpdated: store.lastUpdated || new Date().toISOString(),
+      };
     } catch {
       // ignorer
     }
 
     return {
       totalVisits: 1,
-      cvDownloads: 0,
-      contactClicks: 0,
-      topProjects: [],
-      topMaps: [],
-      dailyTimeline: [{
+      totalProjectClicks: 0,
+      totalCvDownloads: 0,
+      totalMapViews: 0,
+      totalContactClicks: 0,
+      projectBreakdown: [],
+      dailyActivity: [{
         date: new Date().toISOString().slice(0, 10),
+        label: "Aujourd'hui",
         visits: 1,
         projectClicks: 0,
         cvDownloads: 0,
         mapViews: 0,
       }],
+      categoryDistribution: [],
       lastUpdated: new Date().toISOString(),
     };
-  }, [data.projects, data.cartography]);
+  }, [data.projects]);
 
   // Réinitialiser les statistiques
   const resetAnalytics = useCallback(async (): Promise<boolean> => {

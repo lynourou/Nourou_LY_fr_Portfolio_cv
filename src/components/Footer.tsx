@@ -1,7 +1,7 @@
 import React from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { scrollToSection } from '../utils/helpers';
-import { Compass, Linkedin, Github, Mail, ArrowUp, Download } from 'lucide-react';
+import { Compass, Linkedin, Github, Mail, ArrowUp, Download, Lock } from 'lucide-react';
 
 export const Footer: React.FC = () => {
   const { data } = usePortfolio();
@@ -154,9 +154,9 @@ export const Footer: React.FC = () => {
           <div>
             © {currentYear} {data.profile.fullName} · Portfolio professionnel Géomaticien
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <a
-              href="/download-zip"
+              href="./Nourou_LY_Portfolio_cv.zip"
               download="Nourou_LY_Portfolio_cv.zip"
               className="inline-flex items-center gap-1 font-mono text-[11px] text-slate-500 hover:text-emerald-400 transition-colors"
               title="Télécharger l'archive ZIP du code source"
@@ -168,13 +168,18 @@ export const Footer: React.FC = () => {
             <span className="font-mono text-[11px] text-slate-600">
               Ingénierie territoriale &amp; environnementale
             </span>
+            <span aria-hidden="true" className="text-slate-700">·</span>
             {/* Lien direct et sécurisé vers l'espace d'administration */}
             <a
               href="#admin"
-              className="text-slate-500 hover:text-emerald-400 transition-colors text-[11px] font-mono ml-1"
+              onClick={() => {
+                window.location.hash = 'admin';
+              }}
+              className="inline-flex items-center gap-1 text-slate-400 hover:text-emerald-400 transition-colors text-[11px] font-mono font-medium"
               title="Accès espace d'administration"
             >
-              Administration
+              <Lock className="w-3 h-3 text-emerald-500" />
+              <span>Espace Administration</span>
             </a>
           </div>
         </div>
