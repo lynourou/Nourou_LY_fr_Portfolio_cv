@@ -13,6 +13,7 @@ import {
   AnalyticsSummary,
 } from '../types/portfolio';
 import { initialPortfolioData } from '../data/portfolioData';
+import { persistPortfolioData, retrievePortfolioData } from '../utils/storage';
 
 interface PortfolioContextType {
   data: PortfolioData;
@@ -97,34 +98,25 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
     return Boolean(existing);
   });
 
-  // Charger les données du portfolio (depuis l'API ou fallback localStorage)
+  // Charger les données du portfolio (depuis l'API serveur ou stockage robuste IndexedDB/localStorage/portfolio-data.json)
   const refreshData = useCallback(async () => {
     try {
       const res = await fetch('/api/portfolio');
       if (res.ok) {
         const json = await res.json();
         setData(json);
-        try {
-          localStorage.setItem(PORTFOLIO_STORAGE_KEY, JSON.stringify(json));
-        } catch {
-          // ignorer
-        }
-      } else {
-        // En mode statique (GitHub Pages), utiliser le cache local si disponible
-        const cached = localStorage.getItem(PORTFOLIO_STORAGE_KEY);
-        if (cached) {
-          setData(JSON.parse(cached));
-        }
+        await persistPortfolioData(json);
+        return;
       }
     } catch {
-      const cached = localStorage.getItem(PORTFOLIO_STORAGE_KEY);
-      if (cached) {
-        try {
-          setData(JSON.parse(cached));
-        } catch {
-          setData(initialPortfolioData);
-        }
-      }
+      // Serveur absent (GitHub Pages ou mode statique déconnecté)
+    }
+
+    try {
+      const stored = await retrievePortfolioData();
+      setData(stored);
+    } catch {
+      setData(initialPortfolioData);
     } finally {
       setIsLoading(false);
     }
@@ -345,17 +337,17 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
     setIsAdmin(false);
   };
 
-  // Sauvegarder les données de façon sécurisée (Serveur + Cache local synchrone)
+  // Sauvegarder les données de façon sécurisée (Serveur + Cache local synchrone + IndexedDB)
   const savePortfolio = async (newData: PortfolioData): Promise<{ success: boolean; error?: string }> => {
     if (!adminToken) {
       return { success: false, error: 'Accès refusé : session administrateur requise.' };
     }
 
-    // Toujours persister immédiatement en cache local pour garantir la pérennité
+    // Persister immédiatement en stockage local (IndexedDB + localStorage)
     try {
-      localStorage.setItem(PORTFOLIO_STORAGE_KEY, JSON.stringify(newData));
+      await persistPortfolioData(newData);
     } catch (e) {
-      console.warn('Impossible de sauvegarder dans le localStorage :', e);
+      console.warn('Impossible de sauvegarder localement :', e);
     }
     setData(newData);
 

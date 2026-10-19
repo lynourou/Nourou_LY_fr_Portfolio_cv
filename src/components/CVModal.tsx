@@ -1,6 +1,7 @@
 import React from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
-import { FileText, Download, X } from 'lucide-react';
+import { FileText, Download, X, ExternalLink } from 'lucide-react';
+import { openOrDownloadPdf, resolveAssetUrl } from '../utils/storage';
 
 interface CVModalProps {
   isOpen: boolean;
@@ -12,9 +13,12 @@ export const CVModal: React.FC<CVModalProps> = ({ isOpen, onClose }) => {
 
   if (!isOpen) return null;
 
+  const cvTarget = data.profile.cvPdfUrl || './cv.pdf';
+
   const handleDownload = () => {
     trackEvent('cv_download', 'cv', 'Téléchargement CV PDF');
-    window.open(data.profile.cvPdfUrl || '/cv.pdf', '_blank');
+    const safeName = `CV_${(data.profile.fullName || 'Nourou_LY').replace(/\s+/g, '_')}.pdf`;
+    openOrDownloadPdf(cvTarget, safeName);
   };
 
   return (

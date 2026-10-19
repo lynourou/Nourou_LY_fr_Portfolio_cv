@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { scrollToSection, getInitials } from '../utils/helpers';
 import { ArrowDown, FileText, Mail, MapPin, CheckCircle2, QrCode } from 'lucide-react';
+import { resolveAssetUrl } from '../utils/storage';
 
 interface HeroSectionProps {
   onDownloadCv: () => void;
@@ -11,6 +12,7 @@ interface HeroSectionProps {
 export const HeroSection: React.FC<HeroSectionProps> = ({ onDownloadCv, onOpenContactCard }) => {
   const { data } = usePortfolio();
   const { profile } = data;
+  const [avatarError, setAvatarError] = useState(false);
 
   return (
     <section id="accueil" className="relative pt-28 pb-16 lg:pt-36 lg:pb-24 overflow-hidden border-b border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-950 transition-colors">
@@ -94,11 +96,12 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onDownloadCv, onOpenCo
           <div className="lg:col-span-5 flex justify-center lg:justify-end">
             <div className="w-full max-w-sm rounded-xl overflow-hidden bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-800 shadow-sm p-5 transition-colors">
               <div className="aspect-4/3 w-full bg-slate-100 dark:bg-slate-900 rounded-lg overflow-hidden relative flex items-center justify-center border border-slate-200/80 dark:border-slate-800">
-                {profile.avatarUrl ? (
+                {profile.avatarUrl && !avatarError ? (
                   <img
-                    src={profile.avatarUrl}
+                    src={resolveAssetUrl(profile.avatarUrl)}
                     alt={`Photo professionnelle de ${profile.fullName}`}
                     referrerPolicy="no-referrer"
+                    onError={() => setAvatarError(true)}
                     className="w-full h-full object-cover"
                   />
                 ) : (

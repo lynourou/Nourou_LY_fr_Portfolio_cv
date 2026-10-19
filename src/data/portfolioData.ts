@@ -8,8 +8,8 @@ export const initialPortfolioData: PortfolioData = {
       'Géomaticien orienté vers les systèmes d\'information géographique, la cartographie, la télédétection, l\'analyse spatiale, la collecte de données de terrain et la gestion des ressources naturelles.',
     location: 'Sénégal',
     availability: 'Disponible pour opportunités professionnelles',
-    avatarUrl: '', // Monogramme sobre NL par défaut
-    cvPdfUrl: '/cv.pdf',
+    avatarUrl: '', // Monogramme sobre NL par défaut (ou ./photo.jpg / téléversé via l'admin)
+    cvPdfUrl: './cv.pdf',
   },
 
   about: {

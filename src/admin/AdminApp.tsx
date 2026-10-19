@@ -28,9 +28,14 @@ import {
   Loader2,
   ShieldCheck,
   RotateCcw,
+  Globe,
+  ExternalLink,
+  Sparkles,
+  X,
 } from 'lucide-react';
 import { FileInputField } from './components/FileInputField';
 import { AnalyticsSection } from './components/AnalyticsSection';
+import { openOrDownloadPdf, resolveAssetUrl } from '../utils/storage';
 import {
   ProjectDetail,
   ExperienceItem,
@@ -155,6 +160,57 @@ export const AdminApp: React.FC = () => {
     setAboutForm(data.about);
     setContactForm(data.contact);
   }, [data.profile, data.about, data.contact]);
+
+  // État du modal de publication multi-appareils (GitHub Pages)
+  const [showMultiDeviceModal, setShowMultiDeviceModal] = useState(false);
+
+  // Télécharger portfolio-data.json pour déploiement multi-appareils
+  const handleDownloadPortfolioJson = () => {
+    const jsonStr = JSON.stringify(data, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'portfolio-data.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    showFeedback('Fichier portfolio-data.json généré et téléchargé avec succès !');
+  };
+
+  // Sauvegarde rapide spécifique de la photo de profil
+  const handleQuickSaveAvatar = async (newAvatarUrl?: string) => {
+    setIsSavingProfile(true);
+    try {
+      const targetUrl = newAvatarUrl !== undefined ? newAvatarUrl : (profileForm.avatarUrl || '');
+      const ok = await updateProfile({ ...data.profile, avatarUrl: targetUrl });
+      if (ok) {
+        showFeedback('Photo de profil enregistrée avec succès dans le stockage persistant.');
+      } else {
+        showFeedback('Erreur lors de la sauvegarde de la photo.', 'error');
+      }
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  // Sauvegarde rapide et test du document CV
+  const handleQuickSaveCv = async (newCvUrl?: string) => {
+    const targetUrl = newCvUrl !== undefined ? newCvUrl : (profileForm.cvPdfUrl || './cv.pdf');
+    const ok = await updateProfile({ ...data.profile, cvPdfUrl: targetUrl });
+    if (ok) {
+      showFeedback('Document CV enregistré avec succès dans le stockage persistant.');
+    } else {
+      showFeedback('Erreur lors de la sauvegarde du CV.', 'error');
+    }
+  };
+
+  const handleTestDownloadCv = () => {
+    const target = profileForm.cvPdfUrl || data.profile.cvPdfUrl || './cv.pdf';
+    openOrDownloadPdf(target, `CV_${(data.profile.fullName || 'Nourou_LY').replace(/\s+/g, '_')}.pdf`);
+    showFeedback('Ouverture / Téléchargement du CV testé.');
+  };
 
   // Synchronisation lors de l'ouverture du profil
   const handleOpenProfileTab = () => {
@@ -666,7 +722,18 @@ export const AdminApp: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <button
+            type="button"
+            onClick={() => setShowMultiDeviceModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-300 hover:text-white bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-700/60 rounded-md transition-colors cursor-pointer shadow-xs"
+            title="Comment diffuser la photo, le CV et les textes sur smartphone et autres appareils"
+          >
+            <Globe className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="hidden sm:inline">Publier pour tous les appareils</span>
+            <span className="sm:hidden">Publier</span>
+          </button>
+
           <button
             type="button"
             onClick={handleExitAdmin}
@@ -685,7 +752,7 @@ export const AdminApp: React.FC = () => {
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-200 hover:text-white bg-red-950/60 hover:bg-red-900 border border-red-800/80 rounded-md transition-colors cursor-pointer"
           >
             <LogOut className="w-3.5 h-3.5" />
-            <span>Déconnexion</span>
+            <span className="hidden sm:inline">Déconnexion</span>
           </button>
         </div>
       </header>
@@ -1068,22 +1135,74 @@ export const AdminApp: React.FC = () => {
                 </div>
               </div>
 
-              <FileInputField
-                label="Photo de profil professionnelle"
-                value={profileForm.avatarUrl || ''}
-                onChange={(val) => setProfileForm({ ...profileForm, avatarUrl: val })}
-                isImage={true}
-                helperText="JPG, PNG, WebP — compression automatique"
-              />
+              <div className="space-y-2">
+                <FileInputField
+                  label="Photo de profil professionnelle"
+                  value={profileForm.avatarUrl || ''}
+                  onChange={(val) => {
+                    setProfileForm({ ...profileForm, avatarUrl: val });
+                    handleQuickSaveAvatar(val);
+                  }}
+                  isImage={true}
+                  placeholder="./photo.jpg ou https://..."
+                  helperText="JPG, PNG, WebP — optimisée automatiquement"
+                />
 
-              <FileInputField
-                label="Document CV (PDF)"
-                value={profileForm.cvPdfUrl || ''}
-                onChange={(val) => setProfileForm({ ...profileForm, cvPdfUrl: val })}
-                isImage={false}
-                accept="application/pdf"
-                helperText="Document PDF téléchargeable par les recruteurs"
-              />
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleQuickSaveAvatar()}
+                    className="px-3.5 py-1.5 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  >
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Enregistrer la photo maintenant</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowMultiDeviceModal(true)}
+                    className="px-3 py-1.5 text-xs font-medium text-emerald-800 hover:text-emerald-950 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Globe className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Diffuser sur smartphone &amp; autres appareils</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <FileInputField
+                  label="Document CV (PDF)"
+                  value={profileForm.cvPdfUrl || ''}
+                  onChange={(val) => {
+                    setProfileForm({ ...profileForm, cvPdfUrl: val });
+                    handleQuickSaveCv(val);
+                  }}
+                  isImage={false}
+                  accept="application/pdf"
+                  placeholder="./cv.pdf ou https://..."
+                  helperText="Document PDF téléchargeable par les recruteurs"
+                />
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleQuickSaveCv()}
+                    className="px-3.5 py-1.5 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  >
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Enregistrer le CV maintenant</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleTestDownloadCv}
+                    className="px-3 py-1.5 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  >
+                    <Download className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Tester le téléchargement</span>
+                  </button>
+                </div>
+              </div>
 
               <div className="pt-4 border-t border-slate-100 space-y-4">
                 <h3 className="text-sm font-bold text-slate-900">Section À propos</h3>
@@ -2354,42 +2473,96 @@ export const AdminApp: React.FC = () => {
           {currentTab === 'cv' && (
             <div className="space-y-6 max-w-2xl">
               <div>
-                <h2 className="text-xl font-bold text-slate-900">Curriculum Vitae</h2>
-                <p className="text-xs text-slate-500">Gestion du document PDF téléchargé par les visiteurs.</p>
+                <h2 className="text-xl font-bold text-slate-900">Curriculum Vitae (PDF)</h2>
+                <p className="text-xs text-slate-500">
+                  Gestion et mise à jour du document PDF proposé aux recruteurs et visiteurs.
+                </p>
               </div>
 
-              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Chemin ou lien vers le fichier CV actuel :
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={profileForm.cvPdfUrl}
-                      onChange={(e) => setProfileForm({ ...profileForm, cvPdfUrl: e.target.value })}
-                      placeholder="/cv.pdf ou https://..."
-                      className="flex-1 px-3 py-2 text-xs border border-slate-300 rounded-md bg-white"
-                    />
+              {/* Téléversement direct du fichier PDF */}
+              <div className="space-y-3">
+                <FileInputField
+                  label="Document PDF du CV"
+                  value={profileForm.cvPdfUrl || ''}
+                  onChange={(val) => {
+                    setProfileForm({ ...profileForm, cvPdfUrl: val });
+                    handleQuickSaveCv(val);
+                  }}
+                  isImage={false}
+                  accept="application/pdf"
+                  placeholder="./cv.pdf ou https://..."
+                  helperText="Format PDF (recommandé < 3 Mo)"
+                />
+
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => handleQuickSaveCv()}
+                    className="px-4 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg transition-colors flex items-center gap-2 cursor-pointer shadow-2xs"
+                  >
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Enregistrer le CV</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleTestDownloadCv}
+                    className="px-4 py-2 text-xs font-semibold text-slate-800 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg transition-colors flex items-center gap-2 cursor-pointer shadow-2xs"
+                  >
+                    <Download className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Tester le téléchargement du CV</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Saisie manuelle d'URL ou chemin alternatif */}
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+                <label className="block text-xs font-semibold text-slate-700">
+                  Ou saisir un chemin / URL directe vers le CV :
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={profileForm.cvPdfUrl || ''}
+                    onChange={(e) => setProfileForm({ ...profileForm, cvPdfUrl: e.target.value })}
+                    placeholder="./cv.pdf ou https://mon-serveur.com/cv.pdf"
+                    className="flex-1 px-3 py-2 text-xs border border-slate-300 rounded-md bg-white font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleQuickSaveCv(profileForm.cvPdfUrl)}
+                    className="px-4 py-2 text-xs font-semibold text-white bg-slate-900 rounded-md cursor-pointer shrink-0"
+                  >
+                    Valider l'URL
+                  </button>
+                </div>
+              </div>
+
+              {/* Carte explicative pour affichage sur tous les appareils */}
+              <div className="p-4 rounded-xl bg-emerald-50/70 border border-emerald-200 text-xs text-slate-700 space-y-2.5">
+                <div className="flex items-center gap-2 font-bold text-emerald-900">
+                  <Globe className="w-4 h-4 text-emerald-700 shrink-0" />
+                  <span>Comment rendre le CV visible sur TOUS les autres appareils ?</span>
+                </div>
+                <p className="leading-relaxed">
+                  Sur GitHub Pages (hébergement statique), un fichier téléversé localement reste sur votre navigateur. Pour qu'il s'affiche sur <strong>les smartphones et ordinateurs de tous les recruteurs</strong> :
+                </p>
+                <ul className="list-disc list-inside space-y-1 text-slate-600 pl-1">
+                  <li>
+                    <strong>Solution permanente (100% universelle) :</strong> déposez votre document PDF sous le nom <code className="font-mono text-emerald-900 bg-emerald-100/80 px-1 py-0.5 rounded font-semibold">cv.pdf</code> dans le dossier <code className="font-mono text-emerald-900 bg-emerald-100/80 px-1 py-0.5 rounded">docs/</code> (ou <code className="font-mono text-emerald-900 bg-emerald-100/80 px-1 py-0.5 rounded">public/</code>) sur votre dépôt GitHub.
+                  </li>
+                  <li>
+                    <strong>Ou cliquez sur :</strong>
                     <button
                       type="button"
-                      onClick={async () => {
-                        const ok = await updateProfile({ ...data.profile, cvPdfUrl: profileForm.cvPdfUrl });
-                        if (ok) showFeedback('Chemin du CV enregistré avec succès.');
-                      }}
-                      className="px-4 py-2 text-xs font-semibold text-white bg-slate-900 rounded-md"
+                      onClick={() => setShowMultiDeviceModal(true)}
+                      className="inline-flex items-center gap-1 font-semibold text-emerald-800 underline ml-1 hover:text-emerald-950 cursor-pointer"
                     >
-                      Enregistrer
+                      <span>Publier pour tous les appareils</span>
+                      <ExternalLink className="w-3 h-3" />
                     </button>
-                  </div>
-                </div>
-
-                <div className="text-xs text-slate-600 bg-white p-3.5 rounded-lg border border-slate-200 space-y-1">
-                  <div className="font-semibold text-slate-800">Comment déposer un nouveau fichier ?</div>
-                  <p>
-                    Pour remplacer directement le fichier sans modifier l'URL, placez votre document PDF sous le nom <code className="font-mono text-emerald-800">cv.pdf</code> dans le dossier <code className="font-mono text-emerald-800">public/</code> du projet.
-                  </p>
-                </div>
+                  </li>
+                </ul>
               </div>
             </div>
           )}
@@ -2491,31 +2664,157 @@ export const AdminApp: React.FC = () => {
                 </button>
               </div>
 
-              {/* Sauvegarde JSON */}
+              {/* Sauvegarde & Export JSON */}
               <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 space-y-3">
                 <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                   <Database className="w-4 h-4 text-emerald-700" />
-                  <span>Sauvegarde des données (JSON)</span>
+                  <span>Sauvegarde des données (JSON) &amp; Multi-Appareils</span>
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Exportez l'état complet du portfolio pour vos archives ou pour les intégrer directement dans <code className="font-mono text-emerald-800">src/data/portfolioData.ts</code>.
+                  Exportez l'état complet du portfolio pour vos archives ou pour les intégrer directement dans <code className="font-mono text-emerald-800">docs/portfolio-data.json</code> pour que tous vos visiteurs sur smartphone et tablette voient votre photo et CV.
                 </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    navigator.clipboard.writeText(JSON.stringify(data, null, 2));
-                    showFeedback('Données complètes copiées dans le presse-papier !');
-                  }}
-                  className="px-4 py-2 text-xs font-semibold text-slate-800 bg-white border border-slate-300 hover:bg-slate-100 rounded-lg transition-colors"
-                >
-                  Copier le JSON complet
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleDownloadPortfolioJson}
+                    className="px-4 py-2 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Télécharger portfolio-data.json</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(JSON.stringify(data, null, 2));
+                      showFeedback('Données complètes copiées dans le presse-papier !');
+                    }}
+                    className="px-4 py-2 text-xs font-semibold text-slate-800 bg-white border border-slate-300 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                  >
+                    Copier le JSON complet
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowMultiDeviceModal(true)}
+                    className="px-4 py-2 text-xs font-medium text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Globe className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Guide de diffusion multi-appareils</span>
+                  </button>
+                </div>
               </div>
             </div>
           )}
 
         </main>
       </div>
+
+      {/* Modal : Publication Multi-Appareils (GitHub Pages) */}
+      {showMultiDeviceModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-xs p-4"
+          onClick={() => setShowMultiDeviceModal(false)}
+        >
+          <div
+            className="bg-white rounded-2xl max-w-xl w-full p-6 sm:p-7 shadow-2xl border border-slate-200 space-y-6 max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-100">
+                  <Globe className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">
+                    Publication Multi-Appareils
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Afficher la photo, le CV et vos modifications sur smartphones et autres ordinateurs
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowMultiDeviceModal(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                aria-label="Fermer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs text-slate-600 leading-relaxed">
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                <div className="font-semibold text-slate-900 flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-emerald-600" />
+                  <span>Pourquoi un autre appareil ne voyait pas vos changements ?</span>
+                </div>
+                <p>
+                  Votre site est hébergé sur <strong>GitHub Pages</strong> (un serveur statique sans base de données centrale). Quand vous téléversez une photo ou un CV dans l'espace admin sur un appareil, ces fichiers sont enregistrés dans le stockage de ce navigateur. Pour que les recruteurs et vos autres téléphones les voient, ces fichiers doivent être transmis à GitHub !
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/60 space-y-2.5">
+                  <div className="font-bold text-emerald-950 flex items-center justify-between">
+                    <span>Méthode 1 : Télécharger les données à jour</span>
+                    <span className="text-[10px] bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded font-mono">Recommandé</span>
+                  </div>
+                  <p className="text-slate-700">
+                    Téléchargez votre fichier <strong>portfolio-data.json</strong> contenant votre photo, CV et textes modifiés, puis glissez-le dans le dossier <code className="font-mono bg-white px-1.5 py-0.5 rounded border border-emerald-300">docs/</code> sur GitHub.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleDownloadPortfolioJson}
+                    className="w-full py-2.5 px-4 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors flex items-center justify-center gap-2 shadow-xs cursor-pointer"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Télécharger portfolio-data.json</span>
+                  </button>
+                </div>
+
+                <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2.5">
+                  <div className="font-bold text-slate-900">
+                    Méthode 2 : Télécharger l'archive ZIP complète
+                  </div>
+                  <p className="text-slate-600">
+                    Téléchargez l'archive complète de votre code source avec le dossier docs/ prêt pour GitHub Pages.
+                  </p>
+                  <a
+                    href="./Nourou_LY_Portfolio_cv.zip"
+                    download="Nourou_LY_Portfolio_cv.zip"
+                    className="w-full py-2.5 px-4 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg transition-colors flex items-center justify-center gap-2 shadow-xs cursor-pointer"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Télécharger Nourou_LY_Portfolio_cv.zip</span>
+                  </a>
+                </div>
+
+                <div className="p-3.5 rounded-xl border border-amber-200 bg-amber-50/80 text-amber-900 space-y-1.5">
+                  <div className="font-bold flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-amber-700" />
+                    <span>Astuce permanente pour la Photo et le CV</span>
+                  </div>
+                  <p className="text-[11px] leading-normal text-amber-950">
+                    Vous pouvez placer directement votre photo nommée <code className="font-mono bg-white/80 px-1 py-0.5 rounded font-bold">photo.jpg</code> et votre CV nommé <code className="font-mono bg-white/80 px-1 py-0.5 rounded font-bold">cv.pdf</code> dans le dossier <code className="font-mono bg-white/80 px-1 py-0.5 rounded">docs/</code> (ou <code className="font-mono bg-white/80 px-1 py-0.5 rounded">public/</code>) sur votre dépôt GitHub. Ils s'afficheront instantanément et définitivement sur tous les appareils du monde !
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowMultiDeviceModal(false)}
+                className="px-4 py-2 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
