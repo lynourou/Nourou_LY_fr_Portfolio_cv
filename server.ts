@@ -44,10 +44,10 @@ const getAuthConfig = (): AuthConfig => {
       // fallback
     }
   }
-  // Mot de passe initial par défaut (modifiable via l'interface d'administration ou variable d'environnement)
-  const defaultPassword = process.env.ADMIN_PASSWORD || 'geomaticien2026';
+  // Mot de passe initial (défini par l'administrateur à la première connexion ou via ADMIN_PASSWORD)
+  const defaultPassword = process.env.ADMIN_PASSWORD || '';
   const initialConfig: AuthConfig = {
-    passwordHash: hashPassword(defaultPassword),
+    passwordHash: defaultPassword ? hashPassword(defaultPassword) : '',
     sessions: [],
   };
   fs.writeFileSync(AUTH_FILE, JSON.stringify(initialConfig, null, 2), 'utf-8');
@@ -234,6 +234,27 @@ async function startServer() {
   // ROUTES AUTHENTIFICATION ADMINISTRATEUR
   // ==========================================
 
+  // Statut d'authentification (indique si un mot de passe administrateur a été configuré)
+  app.get('/api/admin/auth-status', (_req: Request, res: Response) => {
+    const authCfg = getAuthConfig();
+    res.json({ hasPassword: Boolean(authCfg.passwordHash) });
+  });
+
+  // Définition initiale du mot de passe administrateur
+  app.post('/api/admin/setup-password', (req: Request, res: Response) => {
+    const { password } = req.body;
+    const trimmed = (password || '').trim();
+    if (!trimmed || trimmed.length < 6) {
+      return res.status(400).json({ error: 'Le mot de passe doit comporter au moins 6 caractères.' });
+    }
+    const authCfg = getAuthConfig();
+    authCfg.passwordHash = hashPassword(trimmed);
+    const token = crypto.randomBytes(32).toString('hex');
+    authCfg.sessions.push(token);
+    saveAuthConfig(authCfg);
+    res.json({ success: true, token, message: 'Mot de passe administrateur configuré avec succès.' });
+  });
+
   // Connexion administrateur
   app.post('/api/admin/login', (req: Request, res: Response) => {
     const { password } = req.body;
@@ -245,8 +266,7 @@ async function startServer() {
     const inputPwd = (password || '').trim();
     const inputHash = hashPassword(inputPwd);
 
-    const validDefaults = ['nourou2026!', 'geomaticien2026', 'Nourou2026!'];
-    if (inputHash !== authCfg.passwordHash && !validDefaults.includes(inputPwd)) {
+    if (!authCfg.passwordHash || inputHash !== authCfg.passwordHash) {
       return res.status(401).json({ error: 'Mot de passe administrateur incorrect.' });
     }
 

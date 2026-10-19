@@ -26,6 +26,8 @@ import {
   Download,
   Image as ImageIcon,
   Loader2,
+  ShieldCheck,
+  RotateCcw,
 } from 'lucide-react';
 import { FileInputField } from './components/FileInputField';
 import { AnalyticsSection } from './components/AnalyticsSection';
@@ -42,6 +44,9 @@ export const AdminApp: React.FC = () => {
   const {
     data,
     isAdmin,
+    isPasswordConfigured,
+    setupInitialPassword,
+    resetAdminPassword,
     login,
     logout,
     updateProfile,
@@ -74,6 +79,14 @@ export const AdminApp: React.FC = () => {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
+  // État de création initiale d'un nouveau mot de passe administrateur
+  const [newSetupPassword, setNewSetupPassword] = useState('');
+  const [confirmSetupPassword, setConfirmSetupPassword] = useState('');
+  const [showSetupPwd, setShowSetupPwd] = useState(false);
+  const [showConfirmPwd, setShowConfirmPwd] = useState(false);
+  const [setupError, setSetupError] = useState<string | null>(null);
+  const [isSettingUp, setIsSettingUp] = useState(false);
+
   // État de notification / feedback
   const [feedbackMessage, setFeedbackMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
@@ -95,6 +108,37 @@ export const AdminApp: React.FC = () => {
       setLoginError(res.error || 'Mot de passe incorrect.');
     } else {
       setPasswordInput('');
+    }
+  };
+
+  // Gestion de la création initiale du mot de passe
+  const handleSetupSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSetupError(null);
+
+    const p1 = newSetupPassword.trim();
+    const p2 = confirmSetupPassword.trim();
+
+    if (p1.length < 6) {
+      setSetupError('Le mot de passe doit comporter au moins 6 caractères.');
+      return;
+    }
+
+    if (p1 !== p2) {
+      setSetupError('Les deux mots de passe ne correspondent pas.');
+      return;
+    }
+
+    setIsSettingUp(true);
+    const res = await setupInitialPassword(p1);
+    setIsSettingUp(false);
+
+    if (!res.success) {
+      setSetupError(res.error || 'Erreur lors de la configuration du mot de passe.');
+    } else {
+      setNewSetupPassword('');
+      setConfirmSetupPassword('');
+      showFeedback('Votre mot de passe administrateur a été configuré avec succès !', 'success');
     }
   };
 
@@ -404,6 +448,112 @@ export const AdminApp: React.FC = () => {
   // =========================================================================
 
   if (!isAdmin) {
+    if (!isPasswordConfigured) {
+      return (
+        <div className="min-h-screen bg-slate-900 flex flex-col justify-center items-center p-4 selection:bg-emerald-800 selection:text-white">
+          <div className="max-w-md w-full bg-slate-950 border border-slate-800 rounded-2xl p-8 shadow-2xl space-y-6">
+            
+            <div className="text-center space-y-2">
+              <div className="w-12 h-12 rounded-xl bg-emerald-950/80 text-emerald-400 border border-emerald-800/80 flex items-center justify-center mx-auto shadow-inner">
+                <ShieldCheck className="w-6 h-6" />
+              </div>
+              <h1 className="text-xl font-bold text-white tracking-tight">
+                Créer votre mot de passe administrateur
+              </h1>
+              <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                Aucun mot de passe par défaut n'est configuré. Définissez dès maintenant votre mot de passe personnel pour sécuriser votre espace de gestion.
+              </p>
+            </div>
+
+            {setupError && (
+              <div className="p-3.5 rounded-lg bg-red-950/80 border border-red-800 text-red-200 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+                <span>{setupError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSetupSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                  Nouveau mot de passe (min. 6 caractères)
+                </label>
+                <div className="relative">
+                  <input
+                    type={showSetupPwd ? 'text' : 'password'}
+                    required
+                    autoFocus
+                    value={newSetupPassword}
+                    onChange={(e) => setNewSetupPassword(e.target.value)}
+                    placeholder="••••••••••••"
+                    className="w-full pl-3.5 pr-10 py-2.5 text-sm bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowSetupPwd(!showSetupPwd)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 p-1 cursor-pointer"
+                    title={showSetupPwd ? 'Masquer' : 'Afficher'}
+                  >
+                    {showSetupPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                  Confirmer le mot de passe
+                </label>
+                <div className="relative">
+                  <input
+                    type={showConfirmPwd ? 'text' : 'password'}
+                    required
+                    value={confirmSetupPassword}
+                    onChange={(e) => setConfirmSetupPassword(e.target.value)}
+                    placeholder="••••••••••••"
+                    className="w-full pl-3.5 pr-10 py-2.5 text-sm bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPwd(!showConfirmPwd)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 p-1 cursor-pointer"
+                    title={showConfirmPwd ? 'Masquer' : 'Afficher'}
+                  >
+                    {showConfirmPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSettingUp}
+                className="w-full py-2.5 px-4 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-600 disabled:bg-slate-700 rounded-lg transition-colors shadow-xs flex items-center justify-center gap-2 cursor-pointer"
+              >
+                {isSettingUp ? (
+                  <span>Enregistrement en cours...</span>
+                ) : (
+                  <>
+                    <Key className="w-3.5 h-3.5" />
+                    <span>Créer mon mot de passe et continuer</span>
+                  </>
+                )}
+              </button>
+            </form>
+
+            <div className="pt-4 border-t border-slate-800 text-center">
+              <button
+                type="button"
+                onClick={handleExitAdmin}
+                className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Retourner au site public</span>
+              </button>
+            </div>
+
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen bg-slate-900 flex flex-col justify-center items-center p-4 selection:bg-emerald-800 selection:text-white">
         <div className="max-w-md w-full bg-slate-950 border border-slate-800 rounded-2xl p-8 shadow-2xl space-y-6">
@@ -427,37 +577,6 @@ export const AdminApp: React.FC = () => {
             </div>
           )}
 
-          <div className="p-3 bg-slate-900/90 border border-slate-800 rounded-lg space-y-2">
-            <div className="text-[11px] font-semibold text-slate-300 flex items-center justify-between">
-              <span>Mots de passe initiaux autorisés :</span>
-              <span className="text-emerald-400 font-mono text-[10px]">Prêts à l'emploi</span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setPasswordInput('nourou2026!');
-                  setLoginError(null);
-                }}
-                className="px-2.5 py-1 text-xs font-mono bg-slate-800 hover:bg-slate-700 text-emerald-300 hover:text-emerald-200 border border-slate-700 rounded transition-colors"
-                title="Cliquer pour insérer ce mot de passe"
-              >
-                nourou2026!
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setPasswordInput('geomaticien2026');
-                  setLoginError(null);
-                }}
-                className="px-2.5 py-1 text-xs font-mono bg-slate-800 hover:bg-slate-700 text-emerald-300 hover:text-emerald-200 border border-slate-700 rounded transition-colors"
-                title="Cliquer pour insérer ce mot de passe"
-              >
-                geomaticien2026
-              </button>
-            </div>
-          </div>
-
           <form onSubmit={handleLoginSubmit} className="space-y-4">
             <div>
               <label className="block text-xs font-medium text-slate-300 mb-1.5">
@@ -470,13 +589,13 @@ export const AdminApp: React.FC = () => {
                   autoFocus
                   value={passwordInput}
                   onChange={(e) => setPasswordInput(e.target.value)}
-                  placeholder="nourou2026! ou geomaticien2026"
+                  placeholder="••••••••••••"
                   className="w-full pl-3.5 pr-10 py-2.5 text-sm bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent font-mono"
                 />
                 <button
                   type="button"
                   onClick={() => setShowLoginPassword(!showLoginPassword)}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 p-1"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 p-1 cursor-pointer"
                   title={showLoginPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
                   aria-label={showLoginPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
                 >
@@ -488,11 +607,25 @@ export const AdminApp: React.FC = () => {
             <button
               type="submit"
               disabled={isLoggingIn}
-              className="w-full py-2.5 px-4 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-600 disabled:bg-slate-700 rounded-lg transition-colors shadow-xs"
+              className="w-full py-2.5 px-4 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-600 disabled:bg-slate-700 rounded-lg transition-colors shadow-xs cursor-pointer"
             >
               {isLoggingIn ? 'Vérification en cours...' : 'Se connecter à l\'espace privé'}
             </button>
           </form>
+
+          <div className="pt-2 text-center">
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm('Voulez-vous réinitialiser votre mot de passe pour en définir un nouveau ?')) {
+                  resetAdminPassword();
+                }
+              }}
+              className="text-[11px] text-slate-500 hover:text-emerald-400 transition-colors cursor-pointer"
+            >
+              Mot de passe oublié ? Réinitialiser et en créer un nouveau
+            </button>
+          </div>
 
           <div className="pt-4 border-t border-slate-800 text-center">
             <button
@@ -2330,11 +2463,33 @@ export const AdminApp: React.FC = () => {
 
                 <button
                   type="submit"
-                  className="px-4 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg transition-colors"
+                  className="px-4 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
                 >
                   Mettre à jour le mot de passe
                 </button>
               </form>
+
+              {/* Réinitialisation de mot de passe */}
+              <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 space-y-3">
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <RotateCcw className="w-4 h-4 text-amber-700" />
+                  <span>Réinitialiser les identifiants</span>
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Effacez votre mot de passe administrateur pour réactiver l'écran de création initiale lors de votre prochaine visite.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm('Voulez-vous réinitialiser votre mot de passe administrateur ? Vous serez redirigé vers l\'écran de création d\'un nouveau mot de passe.')) {
+                      resetAdminPassword();
+                    }
+                  }}
+                  className="px-4 py-2 text-xs font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-lg transition-colors cursor-pointer"
+                >
+                  Réinitialiser et créer un nouveau mot de passe
+                </button>
+              </div>
 
               {/* Sauvegarde JSON */}
               <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 space-y-3">

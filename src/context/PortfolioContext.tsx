@@ -20,6 +20,9 @@ interface PortfolioContextType {
   isAdmin: boolean;
   adminToken: string | null;
   // Fonctions d'authentification
+  isPasswordConfigured: boolean;
+  setupInitialPassword: (newPassword: string) => Promise<{ success: boolean; error?: string }>;
+  resetAdminPassword: () => void;
   login: (password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   checkAuthStatus: () => Promise<boolean>;
@@ -84,6 +87,14 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
   const [isAdmin, setIsAdmin] = useState<boolean>(() => {
     const token = sessionStorage.getItem(ADMIN_TOKEN_KEY) || localStorage.getItem(ADMIN_TOKEN_KEY);
     return !!token;
+  });
+  const [isPasswordConfigured, setIsPasswordConfigured] = useState<boolean>(() => {
+    const existing = localStorage.getItem(ADMIN_PWD_KEY);
+    if (existing && ['nourou2026!', 'geomaticien2026', 'Nourou2026!'].includes(existing)) {
+      localStorage.removeItem(ADMIN_PWD_KEY);
+      return false;
+    }
+    return Boolean(existing);
   });
 
   // Charger les données du portfolio (depuis l'API ou fallback localStorage)
@@ -176,12 +187,17 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   // Connexion administrateur hybride (Serveur avec repli autonome GitHub Pages)
   const login = async (password: string): Promise<{ success: boolean; error?: string }> => {
+    const trimmedInput = (password || '').trim();
+    if (!trimmedInput) {
+      return { success: false, error: 'Veuillez saisir votre mot de passe.' };
+    }
+
     // 1. Tenter l'API serveur si elle répond
     try {
       const res = await fetch('/api/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ password: trimmedInput }),
       });
 
       if (res.ok) {
@@ -203,13 +219,15 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     // 2. Mode autonome sécurisé (GitHub Pages)
     const savedCustomPassword = localStorage.getItem(ADMIN_PWD_KEY);
-    const trimmedInput = password.trim();
-    const validPasswords = ['nourou2026!', 'geomaticien2026', 'Nourou2026!'];
-    if (savedCustomPassword) {
-      validPasswords.push(savedCustomPassword);
+    if (!savedCustomPassword) {
+      setIsPasswordConfigured(false);
+      return {
+        success: false,
+        error: 'Aucun mot de passe configuré. Veuillez créer votre mot de passe administrateur.',
+      };
     }
 
-    if (validPasswords.includes(trimmedInput)) {
+    if (savedCustomPassword === trimmedInput) {
       const staticToken = 'static-admin-' + Date.now() + '-' + Math.random().toString(36).substring(2);
       localStorage.setItem(ADMIN_TOKEN_KEY, staticToken);
       sessionStorage.setItem(ADMIN_TOKEN_KEY, staticToken);
@@ -220,8 +238,44 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     return { 
       success: false, 
-      error: 'Mot de passe incorrect. Le mot de passe par défaut est nourou2026! ou geomaticien2026' 
+      error: 'Mot de passe incorrect.' 
     };
+  };
+
+  // Configuration initiale d'un nouveau mot de passe personnalisé
+  const setupInitialPassword = async (newPassword: string): Promise<{ success: boolean; error?: string }> => {
+    const trimmed = (newPassword || '').trim();
+    if (!trimmed || trimmed.length < 6) {
+      return { success: false, error: 'Le mot de passe doit comporter au moins 6 caractères.' };
+    }
+
+    localStorage.setItem(ADMIN_PWD_KEY, trimmed);
+    setIsPasswordConfigured(true);
+
+    let serverToken: string | null = null;
+    try {
+      const res = await fetch('/api/admin/setup-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: trimmed }),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.token) {
+          serverToken = json.token;
+        }
+      }
+    } catch {
+      // Hébergement statique
+    }
+
+    const staticToken = serverToken || ('static-admin-' + Date.now() + '-' + Math.random().toString(36).substring(2));
+    localStorage.setItem(ADMIN_TOKEN_KEY, staticToken);
+    sessionStorage.setItem(ADMIN_TOKEN_KEY, staticToken);
+    setAdminToken(staticToken);
+    setIsAdmin(true);
+
+    return { success: true };
   };
 
   // Déconnexion administrateur
@@ -245,36 +299,50 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
   // Modifier le mot de passe administrateur
   const changeAdminPassword = async (currentPassword: string, newPassword: string) => {
     const savedCustomPassword = localStorage.getItem(ADMIN_PWD_KEY);
-    const validCurrentPasswords = ['nourou2026!', 'geomaticien2026', 'Nourou2026!'];
-    if (savedCustomPassword) {
-      validCurrentPasswords.push(savedCustomPassword);
-    }
-    if (!validCurrentPasswords.includes(currentPassword.trim())) {
-      return { success: false, error: 'Mot de passe actuel incorrect.' };
-    }
+    const trimmedCurrent = (currentPassword || '').trim();
+    const trimmedNew = (newPassword || '').trim();
 
-    if (!newPassword || newPassword.length < 6) {
+    if (!trimmedNew || trimmedNew.length < 6) {
       return { success: false, error: 'Le nouveau mot de passe doit comporter au moins 6 caractères.' };
     }
 
-    localStorage.setItem(ADMIN_PWD_KEY, newPassword);
+    if (savedCustomPassword && savedCustomPassword !== trimmedCurrent) {
+      return { success: false, error: 'Mot de passe actuel incorrect.' };
+    }
+
+    localStorage.setItem(ADMIN_PWD_KEY, trimmedNew);
+    setIsPasswordConfigured(true);
 
     if (adminToken && !adminToken.startsWith('static-admin-')) {
       try {
-        await fetch('/api/admin/change-password', {
+        const res = await fetch('/api/admin/change-password', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${adminToken}`,
           },
-          body: JSON.stringify({ currentPassword, newPassword }),
+          body: JSON.stringify({ currentPassword: trimmedCurrent, newPassword: trimmedNew }),
         });
+        if (!res.ok) {
+          const json = await res.json().catch(() => ({}));
+          return { success: false, error: json.error || 'Erreur lors de la mise à jour.' };
+        }
       } catch {
         // ignorer
       }
     }
 
     return { success: true };
+  };
+
+  // Réinitialiser le mot de passe (permet d'en recréer un nouveau)
+  const resetAdminPassword = () => {
+    localStorage.removeItem(ADMIN_PWD_KEY);
+    setIsPasswordConfigured(false);
+    sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+    localStorage.removeItem(ADMIN_TOKEN_KEY);
+    setAdminToken(null);
+    setIsAdmin(false);
   };
 
   // Sauvegarder les données de façon sécurisée (Serveur + Cache local synchrone)
@@ -615,6 +683,9 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
         isLoading,
         isAdmin,
         adminToken,
+        isPasswordConfigured,
+        setupInitialPassword,
+        resetAdminPassword,
         login,
         logout,
         checkAuthStatus,

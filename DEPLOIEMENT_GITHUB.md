@@ -16,9 +16,10 @@ La page d'administration est désormais déployée et accessible via plusieurs m
    - **`https://lynourou.github.io/Nourou_LY_fr_Portfolio_cv/#admin`** *(Recommandé, fonctionne instantanément sur tous les hébergements statiques)*
    - **`https://lynourou.github.io/Nourou_LY_fr_Portfolio_cv/admin/`** *(Fichier `admin/index.html` compilé)*
    - **`https://lynourou.github.io/Nourou_LY_fr_Portfolio_cv/admin.html`** *(Fichier `admin.html` compilé)*
-4. **Mots de passe par défaut pour se connecter** :
-   - `nourou2026!` *(ou `geomaticien2026`)*
-   - Vous pouvez également modifier ce mot de passe à tout moment depuis l'espace admin.
+4. **Création de votre mot de passe administrateur** :
+   - Aucun mot de passe prédéfini n'est imposé.
+   - Lors de votre premier accès à l'espace admin, un écran dédié vous permet de **définir directement votre propre mot de passe personnel** (min. 6 caractères).
+   - Vous pouvez également le modifier ou le réinitialiser à tout moment depuis l'onglet **Sécurité** de l'espace administration.
 
 ---
 
