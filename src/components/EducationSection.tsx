@@ -1,6 +1,7 @@
 import React from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { GraduationCap, Calendar, MapPin, School, FileText } from 'lucide-react';
+import { openOrDownloadPdf } from '../utils/storage';
 
 export const EducationSection: React.FC = () => {
   const { data } = usePortfolio();
@@ -87,19 +88,25 @@ export const EducationSection: React.FC = () => {
                   )}
 
                   {edu.documents && edu.documents.length > 0 && (
-                    <div className="mt-4 pt-3 border-t border-slate-200/70 dark:border-slate-800 flex flex-wrap gap-3">
-                      {edu.documents.map((doc, idx) => (
-                        <a
-                          key={idx}
-                          href={doc.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400 hover:text-emerald-900 hover:underline"
-                        >
-                          <FileText className="w-3.5 h-3.5" />
-                          <span>{doc.title}</span>
-                        </a>
-                      ))}
+                    <div className="mt-5 pt-4 border-t border-slate-200/70 dark:border-slate-800 space-y-2">
+                      <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                        Documents &amp; Travaux universitaires consultables :
+                      </div>
+                      <div className="flex flex-wrap gap-2.5">
+                        {edu.documents.map((doc, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => {
+                              openOrDownloadPdf(doc.url, `${doc.title.slice(0, 40).replace(/[^a-zA-Z0-9]/g, '_')}.pdf`);
+                            }}
+                            className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80 hover:bg-emerald-100 dark:hover:bg-emerald-900 transition-colors cursor-pointer shadow-2xs"
+                          >
+                            <FileText className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                            <span>{doc.title}</span>
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   )}
 

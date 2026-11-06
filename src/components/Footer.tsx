@@ -1,7 +1,7 @@
 import React from 'react';
 import { usePortfolio } from '../context/PortfolioContext';
 import { scrollToSection } from '../utils/helpers';
-import { Compass, Linkedin, Github, Mail, ArrowUp, Download, Lock } from 'lucide-react';
+import { Compass, Linkedin, Github, Mail, ArrowUp, Lock } from 'lucide-react';
 
 export const Footer: React.FC = () => {
   const { data } = usePortfolio();
@@ -89,6 +89,12 @@ export const Footer: React.FC = () => {
                 Formation
               </button>
               <button
+                onClick={() => scrollToSection('documents')}
+                className="text-left hover:text-white transition-colors"
+              >
+                Mémoires &amp; Docs
+              </button>
+              <button
                 onClick={() => scrollToSection('contact')}
                 className="text-left hover:text-white transition-colors"
               >
@@ -155,16 +161,6 @@ export const Footer: React.FC = () => {
             © {currentYear} {data.profile.fullName} · Portfolio professionnel Géomaticien
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <a
-              href="./Nourou_LY_Portfolio_cv.zip"
-              download="Nourou_LY_Portfolio_cv.zip"
-              className="inline-flex items-center gap-1 font-mono text-[11px] text-slate-500 hover:text-emerald-400 transition-colors"
-              title="Télécharger l'archive ZIP du code source"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Archive ZIP</span>
-            </a>
-            <span aria-hidden="true" className="text-slate-700">·</span>
             <span className="font-mono text-[11px] text-slate-600">
               Ingénierie territoriale &amp; environnementale
             </span>

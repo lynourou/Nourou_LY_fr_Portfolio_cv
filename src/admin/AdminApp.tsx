@@ -32,10 +32,13 @@ import {
   ExternalLink,
   Sparkles,
   X,
+  FolderOpen,
 } from 'lucide-react';
 import { FileInputField } from './components/FileInputField';
 import { AnalyticsSection } from './components/AnalyticsSection';
+import { GoogleDriveImportModal } from './components/GoogleDriveImportModal';
 import { openOrDownloadPdf, resolveAssetUrl } from '../utils/storage';
+import { sendNotificationEvent } from '../services/notificationService';
 import {
   ProjectDetail,
   ExperienceItem,
@@ -43,6 +46,7 @@ import {
   FieldworkItem,
   EducationItem,
   SkillCategory,
+  AcademicDocument,
 } from '../types/portfolio';
 
 export const AdminApp: React.FC = () => {
@@ -69,13 +73,15 @@ export const AdminApp: React.FC = () => {
     saveSkills,
     saveEducation,
     deleteEducation,
+    saveDocument,
+    deleteDocument,
     changeAdminPassword,
     savePortfolio,
   } = usePortfolio();
 
   // Navigation interne de l'administration
   const [currentTab, setCurrentTab] = useState<
-    'dashboard' | 'profile' | 'projects' | 'experiences' | 'maps' | 'fieldwork' | 'skills' | 'education' | 'contact' | 'cv' | 'settings'
+    'dashboard' | 'profile' | 'projects' | 'experiences' | 'maps' | 'fieldwork' | 'skills' | 'education' | 'documents' | 'contact' | 'cv' | 'settings'
   >('dashboard');
 
   // État de connexion
@@ -83,14 +89,6 @@ export const AdminApp: React.FC = () => {
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-
-  // État de création initiale d'un nouveau mot de passe administrateur
-  const [newSetupPassword, setNewSetupPassword] = useState('');
-  const [confirmSetupPassword, setConfirmSetupPassword] = useState('');
-  const [showSetupPwd, setShowSetupPwd] = useState(false);
-  const [showConfirmPwd, setShowConfirmPwd] = useState(false);
-  const [setupError, setSetupError] = useState<string | null>(null);
-  const [isSettingUp, setIsSettingUp] = useState(false);
 
   // État de notification / feedback
   const [feedbackMessage, setFeedbackMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
@@ -116,37 +114,6 @@ export const AdminApp: React.FC = () => {
     }
   };
 
-  // Gestion de la création initiale du mot de passe
-  const handleSetupSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSetupError(null);
-
-    const p1 = newSetupPassword.trim();
-    const p2 = confirmSetupPassword.trim();
-
-    if (p1.length < 6) {
-      setSetupError('Le mot de passe doit comporter au moins 6 caractères.');
-      return;
-    }
-
-    if (p1 !== p2) {
-      setSetupError('Les deux mots de passe ne correspondent pas.');
-      return;
-    }
-
-    setIsSettingUp(true);
-    const res = await setupInitialPassword(p1);
-    setIsSettingUp(false);
-
-    if (!res.success) {
-      setSetupError(res.error || 'Erreur lors de la configuration du mot de passe.');
-    } else {
-      setNewSetupPassword('');
-      setConfirmSetupPassword('');
-      showFeedback('Votre mot de passe administrateur a été configuré avec succès !', 'success');
-    }
-  };
-
   // État d'édition : Profil & Accueil
   const [profileForm, setProfileForm] = useState(data.profile);
   const [aboutForm, setAboutForm] = useState(data.about);
@@ -163,6 +130,84 @@ export const AdminApp: React.FC = () => {
 
   // État du modal de publication multi-appareils (GitHub Pages)
   const [showMultiDeviceModal, setShowMultiDeviceModal] = useState(false);
+  const [showDriveModal, setShowDriveModal] = useState(false);
+  const [githubToken, setGithubToken] = useState(() => {
+    return localStorage.getItem('nourou_github_token') || '';
+  });
+  const [isPublishingToGithub, setIsPublishingToGithub] = useState(false);
+
+  const handleSaveGithubToken = (tok: string) => {
+    setGithubToken(tok);
+    localStorage.setItem('nourou_github_token', tok.trim());
+    showFeedback('Jeton GitHub enregistré sur cet appareil.');
+  };
+
+  // Publication automatique directe sur GitHub Pages via l'API REST officielle
+  const handleAutoPublishToGithub = async () => {
+    const token = (githubToken || localStorage.getItem('nourou_github_token') || '').trim();
+    if (!token) {
+      setCurrentTab('settings');
+      setShowMultiDeviceModal(false);
+      showFeedback('Veuillez d\'abord saisir votre Personal Access Token GitHub (Classic avec droit "repo").', 'error');
+      return;
+    }
+
+    setIsPublishingToGithub(true);
+    try {
+      const owner = 'lynourou';
+      const repo = 'Nourou_LY_fr_Portfolio_cv';
+      const path = 'docs/portfolio-data.json';
+      const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+
+      // 1. Récupérer le SHA du fichier existant
+      let sha: string | undefined;
+      const getRes = await fetch(apiUrl, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/vnd.github+json',
+        },
+      });
+      if (getRes.ok) {
+        const fileInfo = await getRes.json();
+        sha = fileInfo.sha;
+      }
+
+      // 2. Encodage Base64 UTF-8 propre
+      const jsonStr = JSON.stringify(data, null, 2);
+      const utf8Bytes = new TextEncoder().encode(jsonStr);
+      let binaryStr = '';
+      for (let i = 0; i < utf8Bytes.length; i++) {
+        binaryStr += String.fromCharCode(utf8Bytes[i]);
+      }
+      const base64Content = btoa(binaryStr);
+
+      // 3. Envoyer la mise à jour directement vers GitHub
+      const putRes = await fetch(apiUrl, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/vnd.github+json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: `chore: mise à jour automatique portfolio (${new Date().toLocaleDateString('fr-FR')} ${new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })})`,
+          content: base64Content,
+          sha: sha,
+        }),
+      });
+
+      if (putRes.ok) {
+        showFeedback('🎉 Synchronisation réussie ! Vos modifications sont publiées en direct sur GitHub Pages.', 'success');
+      } else {
+        const errJson = await putRes.json().catch(() => ({}));
+        showFeedback(`Erreur GitHub (${putRes.status}) : ${errJson.message || 'Vérifiez le token et les droits repo.'}`, 'error');
+      }
+    } catch (err: any) {
+      showFeedback(`Erreur de connexion : ${err.message || 'Impossible de contacter GitHub.'}`, 'error');
+    } finally {
+      setIsPublishingToGithub(false);
+    }
+  };
 
   // Télécharger portfolio-data.json pour déploiement multi-appareils
   const handleDownloadPortfolioJson = () => {
@@ -408,6 +453,39 @@ export const AdminApp: React.FC = () => {
     }
   };
 
+  // Édition de Documents & Mémoires
+  const [editingDoc, setEditingDoc] = useState<AcademicDocument | null>(null);
+  const [isCreatingDoc, setIsCreatingDoc] = useState(false);
+
+  const handleStartCreateDocument = () => {
+    setEditingDoc({
+      id: `doc-${Date.now()}`,
+      title: '',
+      category: 'memoire',
+      institution: 'CEDT Le G15',
+      year: '2026',
+      description: '',
+      pdfUrl: '',
+      pageCount: '',
+      keywords: [],
+      featured: true,
+    });
+    setIsCreatingDoc(true);
+  };
+
+  const handleSaveDocumentForm = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingDoc) return;
+    const ok = await saveDocument(editingDoc);
+    if (ok) {
+      showFeedback('Document / Mémoire enregistré avec succès.');
+      setEditingDoc(null);
+      setIsCreatingDoc(false);
+    } else {
+      showFeedback('Erreur lors de l\'enregistrement du document.', 'error');
+    }
+  };
+
   // Compétences : gestion simplifiée
   const [newCatTitle, setNewCatTitle] = useState('');
   const [newSkillCatId, setNewSkillCatId] = useState('');
@@ -492,8 +570,12 @@ export const AdminApp: React.FC = () => {
       const target = window.location.pathname.replace(/\/admin(\.html|\/.*)?$/i, '') || './';
       window.location.href = target.endsWith('/') ? target : target + '/';
     } else {
+      try {
+        history.pushState(null, '', window.location.pathname);
+      } catch {
+        // fallback
+      }
       window.location.hash = '';
-      window.location.search = '';
       window.dispatchEvent(new Event('hashchange'));
       window.dispatchEvent(new Event('popstate'));
     }
@@ -504,112 +586,6 @@ export const AdminApp: React.FC = () => {
   // =========================================================================
 
   if (!isAdmin) {
-    if (!isPasswordConfigured) {
-      return (
-        <div className="min-h-screen bg-slate-900 flex flex-col justify-center items-center p-4 selection:bg-emerald-800 selection:text-white">
-          <div className="max-w-md w-full bg-slate-950 border border-slate-800 rounded-2xl p-8 shadow-2xl space-y-6">
-            
-            <div className="text-center space-y-2">
-              <div className="w-12 h-12 rounded-xl bg-emerald-950/80 text-emerald-400 border border-emerald-800/80 flex items-center justify-center mx-auto shadow-inner">
-                <ShieldCheck className="w-6 h-6" />
-              </div>
-              <h1 className="text-xl font-bold text-white tracking-tight">
-                Créer votre mot de passe administrateur
-              </h1>
-              <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                Aucun mot de passe par défaut n'est configuré. Définissez dès maintenant votre mot de passe personnel pour sécuriser votre espace de gestion.
-              </p>
-            </div>
-
-            {setupError && (
-              <div className="p-3.5 rounded-lg bg-red-950/80 border border-red-800 text-red-200 text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
-                <span>{setupError}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleSetupSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                  Nouveau mot de passe (min. 6 caractères)
-                </label>
-                <div className="relative">
-                  <input
-                    type={showSetupPwd ? 'text' : 'password'}
-                    required
-                    autoFocus
-                    value={newSetupPassword}
-                    onChange={(e) => setNewSetupPassword(e.target.value)}
-                    placeholder="••••••••••••"
-                    className="w-full pl-3.5 pr-10 py-2.5 text-sm bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent font-mono"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowSetupPwd(!showSetupPwd)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 p-1 cursor-pointer"
-                    title={showSetupPwd ? 'Masquer' : 'Afficher'}
-                  >
-                    {showSetupPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                  Confirmer le mot de passe
-                </label>
-                <div className="relative">
-                  <input
-                    type={showConfirmPwd ? 'text' : 'password'}
-                    required
-                    value={confirmSetupPassword}
-                    onChange={(e) => setConfirmSetupPassword(e.target.value)}
-                    placeholder="••••••••••••"
-                    className="w-full pl-3.5 pr-10 py-2.5 text-sm bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent font-mono"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmPwd(!showConfirmPwd)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 p-1 cursor-pointer"
-                    title={showConfirmPwd ? 'Masquer' : 'Afficher'}
-                  >
-                    {showConfirmPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={isSettingUp}
-                className="w-full py-2.5 px-4 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-600 disabled:bg-slate-700 rounded-lg transition-colors shadow-xs flex items-center justify-center gap-2 cursor-pointer"
-              >
-                {isSettingUp ? (
-                  <span>Enregistrement en cours...</span>
-                ) : (
-                  <>
-                    <Key className="w-3.5 h-3.5" />
-                    <span>Créer mon mot de passe et continuer</span>
-                  </>
-                )}
-              </button>
-            </form>
-
-            <div className="pt-4 border-t border-slate-800 text-center">
-              <button
-                type="button"
-                onClick={handleExitAdmin}
-                className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors cursor-pointer"
-              >
-                <ArrowLeft className="w-3.5 h-3.5" />
-                <span>Retourner au site public</span>
-              </button>
-            </div>
-
-          </div>
-        </div>
-      );
-    }
-
     return (
       <div className="min-h-screen bg-slate-900 flex flex-col justify-center items-center p-4 selection:bg-emerald-800 selection:text-white">
         <div className="max-w-md w-full bg-slate-950 border border-slate-800 rounded-2xl p-8 shadow-2xl space-y-6">
@@ -669,20 +645,6 @@ export const AdminApp: React.FC = () => {
             </button>
           </form>
 
-          <div className="pt-2 text-center">
-            <button
-              type="button"
-              onClick={() => {
-                if (window.confirm('Voulez-vous réinitialiser votre mot de passe pour en définir un nouveau ?')) {
-                  resetAdminPassword();
-                }
-              }}
-              className="text-[11px] text-slate-500 hover:text-emerald-400 transition-colors cursor-pointer"
-            >
-              Mot de passe oublié ? Réinitialiser et en créer un nouveau
-            </button>
-          </div>
-
           <div className="pt-4 border-t border-slate-800 text-center">
             <button
               type="button"
@@ -725,13 +687,33 @@ export const AdminApp: React.FC = () => {
         <div className="flex items-center gap-2 sm:gap-3">
           <button
             type="button"
+            onClick={handleAutoPublishToGithub}
+            disabled={isPublishingToGithub}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-800/60 border border-emerald-500/50 rounded-md transition-colors cursor-pointer shadow-xs"
+            title="Envoyer automatiquement toutes les modifications en direct sur GitHub Pages"
+          >
+            {isPublishingToGithub ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Publication en cours...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-3.5 h-3.5 text-emerald-200" />
+                <span className="hidden sm:inline">Synchroniser en direct sur GitHub</span>
+                <span className="sm:hidden">Sync GitHub</span>
+              </>
+            )}
+          </button>
+
+          <button
+            type="button"
             onClick={() => setShowMultiDeviceModal(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-300 hover:text-white bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-700/60 rounded-md transition-colors cursor-pointer shadow-xs"
-            title="Comment diffuser la photo, le CV et les textes sur smartphone et autres appareils"
+            title="Options de publication multi-appareils (GitHub Pages)"
           >
             <Globe className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="hidden sm:inline">Publier pour tous les appareils</span>
-            <span className="sm:hidden">Publier</span>
+            <span className="hidden sm:inline">Multi-Appareils</span>
           </button>
 
           <button
@@ -747,7 +729,7 @@ export const AdminApp: React.FC = () => {
             type="button"
             onClick={async () => {
               await logout();
-              window.location.hash = '';
+              handleExitAdmin();
             }}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-200 hover:text-white bg-red-950/60 hover:bg-red-900 border border-red-800/80 rounded-md transition-colors cursor-pointer"
           >
@@ -892,6 +874,22 @@ export const AdminApp: React.FC = () => {
               <span>Formation</span>
             </div>
             <span className="font-mono text-[11px] opacity-70">{data.education.length}</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setEditingDoc(null);
+              setCurrentTab('documents');
+            }}
+            className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium rounded-lg text-left transition-colors ${
+              currentTab === 'documents' ? 'bg-slate-900 text-white font-semibold' : 'text-slate-700 hover:bg-slate-100'
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              <FileText className="w-4 h-4 text-emerald-500" />
+              <span>Documents &amp; Mémoires</span>
+            </div>
+            <span className="font-mono text-[11px] opacity-70">{(data.documents || []).length}</span>
           </button>
 
           <button
@@ -1733,13 +1731,26 @@ export const AdminApp: React.FC = () => {
                   <p className="text-xs text-slate-500">Gestion des cartes thématiques pour la galerie publique.</p>
                 </div>
                 {!editingCarto && (
-                  <button
-                    onClick={handleStartCreateCarto}
-                    className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg transition-colors"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Nouvelle carte</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowDriveModal(true)}
+                      className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg transition-colors cursor-pointer shadow-2xs"
+                      title="Importer les cartes du dossier 'Cartes' depuis Google Drive"
+                    >
+                      <FolderOpen className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Importer depuis Google Drive</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleStartCreateCarto}
+                      className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Nouvelle carte</span>
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -2405,6 +2416,255 @@ export const AdminApp: React.FC = () => {
           )}
 
           {/* ============================================================ */}
+          {/* TAB : DOCUMENTS & MÉMOIRES                                  */}
+          {/* ============================================================ */}
+          {currentTab === 'documents' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between pb-4 border-b border-slate-200">
+                <div>
+                  <h2 className="text-xl font-bold text-slate-900">Documents &amp; Mémoires</h2>
+                  <p className="text-xs text-slate-500">
+                    Gestion des mémoires de fin d'études, rapports techniques, attestations et publications à mettre à disposition des visiteurs et recruteurs.
+                  </p>
+                </div>
+                {!editingDoc && (
+                  <button
+                    type="button"
+                    onClick={handleStartCreateDocument}
+                    className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Nouveau document / mémoire</span>
+                  </button>
+                )}
+              </div>
+
+              {editingDoc ? (
+                <form onSubmit={handleSaveDocumentForm} className="space-y-4 bg-slate-50 p-6 rounded-xl border border-slate-200">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+                    <h3 className="font-bold text-sm text-slate-900">
+                      {isCreatingDoc ? 'Ajouter un document ou mémoire' : 'Modifier le document'}
+                    </h3>
+                    <button type="button" onClick={() => setEditingDoc(null)} className="text-xs text-slate-600 hover:text-slate-900 cursor-pointer">
+                      Annuler
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-medium text-slate-700 mb-1">Titre complet du document *</label>
+                      <input
+                        type="text"
+                        required
+                        value={editingDoc.title}
+                        onChange={(e) => setEditingDoc({ ...editingDoc, title: e.target.value })}
+                        placeholder="ex. Mémoire de fin d'études BTS Géomatique : Apport de la géomatique..."
+                        className="w-full px-3 py-1.5 text-sm bg-white border border-slate-300 rounded-md"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-700 mb-1">Catégorie</label>
+                      <select
+                        value={editingDoc.category}
+                        onChange={(e) => setEditingDoc({ ...editingDoc, category: e.target.value as any })}
+                        className="w-full px-3 py-1.5 text-sm bg-white border border-slate-300 rounded-md"
+                      >
+                        <option value="memoire">Mémoire académique</option>
+                        <option value="rapport_stage">Rapport de stage / mission</option>
+                        <option value="publication">Publication / Étude</option>
+                        <option value="attestation">Attestation / Certificat</option>
+                        <option value="autre">Autre document technique</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-700 mb-1">Institution / Organisme</label>
+                      <input
+                        type="text"
+                        value={editingDoc.institution}
+                        onChange={(e) => setEditingDoc({ ...editingDoc, institution: e.target.value })}
+                        placeholder="ex. CEDT Le G15 / DEFCCS"
+                        className="w-full px-3 py-1.5 text-sm bg-white border border-slate-300 rounded-md"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-700 mb-1">Année</label>
+                      <input
+                        type="text"
+                        value={editingDoc.year}
+                        onChange={(e) => setEditingDoc({ ...editingDoc, year: e.target.value })}
+                        placeholder="ex. 2026"
+                        className="w-full px-3 py-1.5 text-sm bg-white border border-slate-300 rounded-md"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-700 mb-1">Nombre de pages</label>
+                      <input
+                        type="text"
+                        value={editingDoc.pageCount || ''}
+                        onChange={(e) => setEditingDoc({ ...editingDoc, pageCount: e.target.value })}
+                        placeholder="ex. 136 pages"
+                        className="w-full px-3 py-1.5 text-sm bg-white border border-slate-300 rounded-md"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Téléversement du document PDF */}
+                  <FileInputField
+                    label="Fichier PDF du document *"
+                    value={editingDoc.pdfUrl}
+                    onChange={(val) => setEditingDoc({ ...editingDoc, pdfUrl: val })}
+                    isImage={false}
+                    accept="application/pdf"
+                    helperText="Fichier PDF (téléversement local ou URL externe)"
+                  />
+
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">Résumé / Description synthétique</label>
+                    <textarea
+                      rows={3}
+                      value={editingDoc.description}
+                      onChange={(e) => setEditingDoc({ ...editingDoc, description: e.target.value })}
+                      placeholder="Contexte, méthodologie géomatique, données mobilisées, résultats clés..."
+                      className="w-full px-3 py-1.5 text-sm bg-white border border-slate-300 rounded-md"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">Mots-clés (séparés par virgules)</label>
+                    <input
+                      type="text"
+                      value={(editingDoc.keywords || []).join(', ')}
+                      onChange={(e) =>
+                        setEditingDoc({
+                          ...editingDoc,
+                          keywords: e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
+                        })
+                      }
+                      placeholder="Télédétection, QGIS, Mbao, PostGIS, WebSIG..."
+                      className="w-full px-3 py-1.5 text-sm bg-white border border-slate-300 rounded-md"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-2">
+                    <input
+                      type="checkbox"
+                      id="doc-featured"
+                      checked={editingDoc.featured ?? true}
+                      onChange={(e) => setEditingDoc({ ...editingDoc, featured: e.target.checked })}
+                      className="rounded text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <label htmlFor="doc-featured" className="text-xs text-slate-700 cursor-pointer">
+                      Mettre en avant sur la page publique (recommandé pour votre mémoire de fin d'études)
+                    </label>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => setEditingDoc(null)}
+                      className="px-4 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg cursor-pointer"
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-5 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+                    >
+                      Enregistrer le document
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div className="space-y-3">
+                  {(!data.documents || data.documents.length === 0) ? (
+                    <div className="p-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-300 text-xs text-slate-500">
+                      Aucun document enregistré. Cliquez sur « Nouveau document / mémoire » pour mettre en ligne vos mémoires, rapports et attestations.
+                    </div>
+                  ) : (
+                    data.documents.map((doc) => (
+                      <div
+                        key={doc.id}
+                        className="flex items-start justify-between p-4 bg-slate-50 rounded-xl border border-slate-200 gap-4"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="p-2.5 rounded-lg bg-emerald-100 text-emerald-800 shrink-0 mt-0.5">
+                            <FileText className="w-5 h-5" />
+                          </div>
+                          <div className="space-y-1">
+                            <div className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                              <span>{doc.title}</span>
+                              {doc.pageCount && (
+                                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-200 text-slate-700">
+                                  {doc.pageCount}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-xs text-slate-500 font-mono">
+                              {doc.institution} · {doc.year} · <span className="capitalize text-emerald-800 font-sans font-semibold">{doc.category.replace('_', ' ')}</span>
+                            </div>
+                            <p className="text-xs text-slate-600 line-clamp-2 max-w-2xl leading-relaxed">
+                              {doc.description}
+                            </p>
+                            {doc.keywords && doc.keywords.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5 pt-1">
+                                {doc.keywords.map((kw, kwIdx) => (
+                                  <span key={kwIdx} className="text-[10px] px-2 py-0.5 bg-white border border-slate-200 rounded text-slate-600">
+                                    #{kw}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          {doc.pdfUrl && (
+                            <button
+                              type="button"
+                              onClick={() => openOrDownloadPdf(doc.pdfUrl, `${doc.title.slice(0, 30).replace(/[^a-zA-Z0-9]/g, '_')}.pdf`)}
+                              className="p-1.5 text-emerald-700 hover:text-emerald-900 bg-white border border-slate-200 rounded cursor-pointer"
+                              title="Consulter le document PDF"
+                            >
+                              <ExternalLink className="w-4 h-4" />
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingDoc(doc);
+                              setIsCreatingDoc(false);
+                            }}
+                            className="p-1.5 text-slate-600 hover:text-slate-900 bg-white border border-slate-200 rounded cursor-pointer"
+                            title="Modifier"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (window.confirm(`Supprimer le document "${doc.title}" ?`)) {
+                                const ok = await deleteDocument(doc.id);
+                                if (ok) showFeedback('Document supprimé.');
+                              }
+                            }}
+                            className="p-1.5 text-red-600 hover:text-red-900 bg-white border border-slate-200 rounded cursor-pointer"
+                            title="Supprimer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ============================================================ */}
           {/* TAB : COORDONNÉES                                           */}
           {/* ============================================================ */}
           {currentTab === 'contact' && (
@@ -2642,26 +2902,255 @@ export const AdminApp: React.FC = () => {
                 </button>
               </form>
 
-              {/* Réinitialisation de mot de passe */}
-              <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 space-y-3">
-                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                  <RotateCcw className="w-4 h-4 text-amber-700" />
-                  <span>Réinitialiser les identifiants</span>
+              {/* Statut de protection et d'intégrité */}
+              <div className="bg-emerald-50/80 p-5 rounded-xl border border-emerald-200 space-y-2">
+                <h3 className="text-sm font-bold text-emerald-950 flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-emerald-700" />
+                  <span>Protection cryptographique renforcée (SHA-256)</span>
                 </h3>
-                <p className="text-xs text-slate-500">
-                  Effacez votre mot de passe administrateur pour réactiver l'écran de création initiale lors de votre prochaine visite.
+                <p className="text-xs text-emerald-900 leading-relaxed">
+                  Votre espace d'administration est strictement verrouillé. Aucun visiteur externe ni tiers disposant du lien public ne peut créer, réinitialiser ou modifier votre mot de passe sans connaître le mot de passe actuel.
                 </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (window.confirm('Voulez-vous réinitialiser votre mot de passe administrateur ? Vous serez redirigé vers l\'écran de création d\'un nouveau mot de passe.')) {
-                      resetAdminPassword();
-                    }
-                  }}
-                  className="px-4 py-2 text-xs font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-lg transition-colors cursor-pointer"
-                >
-                  Réinitialiser et créer un nouveau mot de passe
-                </button>
+              </div>
+
+              {/* Configuration de la synchronisation automatique en direct sur GitHub */}
+              <div className="bg-slate-900 text-white p-6 rounded-xl border border-slate-800 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-bold flex items-center gap-2 text-white">
+                    <Sparkles className="w-4 h-4 text-emerald-400" />
+                    <span>Synchronisation Automatique en direct sur GitHub Pages</span>
+                  </h3>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800">
+                    Sans ZIP ni Terminal
+                  </span>
+                </div>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Connectez votre compte GitHub en collant votre <strong>Personal Access Token (Classic)</strong> avec la permission <code className="font-mono bg-slate-800 text-emerald-400 px-1 py-0.5 rounded">repo</code>. Vos modifications de photo, CV et textes seront envoyées directement sur votre dépôt <code className="font-mono bg-slate-800 text-emerald-400 px-1 py-0.5 rounded">lynourou/Nourou_LY_fr_Portfolio_cv</code> en 1 clic !
+                </p>
+
+                <div className="space-y-2">
+                  <label className="block text-xs font-medium text-slate-300">
+                    GitHub Personal Access Token (Classic) :
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="password"
+                      value={githubToken}
+                      onChange={(e) => setGithubToken(e.target.value)}
+                      placeholder="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                      className="flex-1 px-3 py-2 text-xs bg-slate-950 border border-slate-700 rounded-lg text-white font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleSaveGithubToken(githubToken)}
+                      className="px-4 py-2 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-600 rounded-lg transition-colors cursor-pointer shrink-0"
+                    >
+                      Enregistrer
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Le jeton est conservé uniquement et localement dans votre navigateur pour communiquer avec l'API GitHub.
+                  </p>
+                </div>
+
+                <div className="pt-2 flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleAutoPublishToGithub}
+                    disabled={isPublishingToGithub}
+                    className="px-4 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-800/60 rounded-lg transition-colors flex items-center gap-2 cursor-pointer shadow-xs"
+                  >
+                    {isPublishingToGithub ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Synchronisation vers GitHub en cours...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5 text-emerald-200" />
+                        <span>Tester la synchronisation automatique</span>
+                      </>
+                    )}
+                  </button>
+
+                  <a
+                    href="https://github.com/settings/tokens/new?scopes=repo&description=Portfolio_Nourou_Sync"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs text-slate-300 hover:text-white underline cursor-pointer"
+                  >
+                    <span>Générer un token GitHub en 2 clics</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              </div>
+
+              {/* Configuration des Notifications de Visite & Formspree / Webhooks */}
+              <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 space-y-5">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <Mail className="w-4 h-4 text-emerald-700" />
+                    <span>Système d'Alerte Visiteur &amp; Formspree / Webhook</span>
+                  </h3>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold">
+                    Envoi instantané par Email &amp; Webhook
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Recevez immédiatement une alerte détaillée dès qu'un visiteur ou un recruteur ouvre votre portfolio sur GitHub Pages, consulte vos projets ou télécharge votre CV.
+                </p>
+
+                <div className="space-y-4">
+                  {/* Service 1 : Formspree (Idéal pour recevoir un e-mail sur lynourou12@gmail.com sans aucun serveur) */}
+                  <div className="p-4 rounded-xl bg-white border border-slate-200 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                        <Sparkles className="w-4 h-4 text-emerald-600" />
+                        <span>Option 1 : Alertes Email automatiques via Formspree (Gratuit)</span>
+                      </div>
+                      <a
+                        href="https://formspree.io/register"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-[11px] text-emerald-700 hover:text-emerald-900 underline"
+                      >
+                        <span>Créer un formulaire Formspree gratuit</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Sur <a href="https://formspree.io" target="_blank" rel="noopener noreferrer" className="underline text-emerald-800">formspree.io</a>, créez un formulaire et collez son identifiant (ex: <code className="font-mono bg-slate-100 px-1 py-0.5 rounded text-emerald-800">xayzbqdr</code> ou l'URL complète <code className="font-mono bg-slate-100 px-1 py-0.5 rounded text-emerald-800">https://formspree.io/f/...</code>). Chaque visiteur vous enverra un email détaillé instantané !
+                    </p>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="ID Formspree (ex: xayzbqdr ou https://formspree.io/f/...)"
+                        value={data.notificationConfig?.formspreeId || ''}
+                        onChange={async (e) => {
+                          const updated = {
+                            ...data,
+                            notificationConfig: {
+                              emailNotificationsEnabled: true,
+                              notifyEmail: data.contact.email || 'lynourou12@gmail.com',
+                              ...data.notificationConfig,
+                              formspreeId: e.target.value.trim(),
+                            },
+                          };
+                          await savePortfolio(updated);
+                        }}
+                        className="flex-1 px-3 py-1.5 bg-white border border-slate-300 rounded-md font-mono text-xs"
+                      />
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const ok = await sendNotificationEvent(data.notificationConfig, {
+                            eventType: 'visit',
+                            eventLabel: 'Test de notification Formspree / Email',
+                          });
+                          if (ok) {
+                            showFeedback('Notification de test envoyée avec succès !');
+                          } else {
+                            showFeedback('Test envoyé (vérifiez votre boîte mail ou votre tableau de bord Formspree).');
+                          }
+                        }}
+                        className="px-3.5 py-1.5 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-md cursor-pointer shrink-0"
+                      >
+                        Tester l'envoi
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Service 2 : Webhook Discord / Slack / Make / Zapier */}
+                  <div className="p-4 rounded-xl bg-white border border-slate-200 space-y-2.5">
+                    <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                      <Globe className="w-4 h-4 text-emerald-600" />
+                      <span>Option 2 : Webhook universel (Discord, Slack, Make, Zapier)</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Collez l'URL de votre Webhook Discord ou Slack pour recevoir une notification push sur votre smartphone à chaque fois que quelqu'un ouvre votre portfolio.
+                    </p>
+                    <div className="flex gap-2">
+                      <input
+                        type="url"
+                        placeholder="https://discord.com/api/webhooks/... ou https://hooks.slack.com/..."
+                        value={data.notificationConfig?.webhookUrl || ''}
+                        onChange={async (e) => {
+                          const updated = {
+                            ...data,
+                            notificationConfig: {
+                              emailNotificationsEnabled: true,
+                              notifyEmail: data.contact.email || 'lynourou12@gmail.com',
+                              ...data.notificationConfig,
+                              webhookUrl: e.target.value.trim(),
+                            },
+                          };
+                          await savePortfolio(updated);
+                        }}
+                        className="flex-1 px-3 py-1.5 bg-white border border-slate-300 rounded-md font-mono text-xs"
+                      />
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const ok = await sendNotificationEvent(data.notificationConfig, {
+                            eventType: 'visit',
+                            eventLabel: 'Test de Webhook en direct',
+                          });
+                          if (ok) {
+                            showFeedback('Alerte webhook transmise avec succès !');
+                          } else {
+                            showFeedback('Signal webhook émis.');
+                          }
+                        }}
+                        className="px-3.5 py-1.5 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-md cursor-pointer shrink-0"
+                      >
+                        Tester le Webhook
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Paramètres de déclenchement */}
+                  <div className="p-3 bg-slate-100/70 rounded-lg flex flex-wrap items-center justify-between gap-3 text-xs">
+                    <label className="flex items-center gap-2 text-slate-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={data.notificationConfig?.notifyOnCvDownload ?? true}
+                        onChange={async (e) => {
+                          const updated = {
+                            ...data,
+                            notificationConfig: {
+                              emailNotificationsEnabled: true,
+                              ...data.notificationConfig,
+                              notifyOnCvDownload: e.target.checked,
+                            },
+                          };
+                          await savePortfolio(updated);
+                        }}
+                        className="rounded text-emerald-600 focus:ring-emerald-500"
+                      />
+                      <span>M'alerter également lors d'un téléchargement de CV</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 text-slate-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={data.notificationConfig?.notifyOnContactClick ?? true}
+                        onChange={async (e) => {
+                          const updated = {
+                            ...data,
+                            notificationConfig: {
+                              emailNotificationsEnabled: true,
+                              ...data.notificationConfig,
+                              notifyOnContactClick: e.target.checked,
+                            },
+                          };
+                          await savePortfolio(updated);
+                        }}
+                        className="rounded text-emerald-600 focus:ring-emerald-500"
+                      />
+                      <span>M'alerter lors d'un clic sur mes coordonnées</span>
+                    </label>
+                  </div>
+                </div>
               </div>
 
               {/* Sauvegarde & Export JSON */}
@@ -2756,10 +3245,42 @@ export const AdminApp: React.FC = () => {
               </div>
 
               <div className="space-y-3">
-                <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/60 space-y-2.5">
-                  <div className="font-bold text-emerald-950 flex items-center justify-between">
-                    <span>Méthode 1 : Télécharger les données à jour</span>
-                    <span className="text-[10px] bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded font-mono">Recommandé</span>
+                {/* Méthode 0 : 1-clic direct avec l'API GitHub */}
+                <div className="p-4 rounded-xl border border-emerald-500 bg-emerald-950 text-white space-y-2.5 shadow-sm">
+                  <div className="font-bold text-white flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-emerald-400" />
+                      <span>Méthode 1 : Synchronisation 1-Clic Directe (Automatique)</span>
+                    </span>
+                    <span className="text-[10px] bg-emerald-500 text-slate-950 px-2 py-0.5 rounded font-bold">Le plus rapide</span>
+                  </div>
+                  <p className="text-emerald-100 text-xs">
+                    Publiez instantanément votre photo, CV et modifications directement sur votre dépôt GitHub Pages, sans rien télécharger ni taper de commande !
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleAutoPublishToGithub}
+                    disabled={isPublishingToGithub}
+                    className="w-full py-2.5 px-4 text-xs font-semibold text-slate-950 bg-emerald-400 hover:bg-emerald-300 disabled:bg-emerald-800 disabled:text-emerald-200 rounded-lg transition-colors flex items-center justify-center gap-2 shadow-xs cursor-pointer"
+                  >
+                    {isPublishingToGithub ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Synchronisation en cours vers GitHub...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4 text-slate-950" />
+                        <span>Synchroniser en 1 clic sur GitHub</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2.5">
+                  <div className="font-bold text-slate-900 flex items-center justify-between">
+                    <span>Méthode 2 : Télécharger les données à jour</span>
+                    <span className="text-[10px] bg-slate-200 text-slate-700 px-2 py-0.5 rounded font-mono">Manuel</span>
                   </div>
                   <p className="text-slate-700">
                     Téléchargez votre fichier <strong>portfolio-data.json</strong> contenant votre photo, CV et textes modifiés, puis glissez-le dans le dossier <code className="font-mono bg-white px-1.5 py-0.5 rounded border border-emerald-300">docs/</code> sur GitHub.
@@ -2814,6 +3335,19 @@ export const AdminApp: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal : Importation Google Drive de la Cartothèque */}
+      {showDriveModal && (
+        <GoogleDriveImportModal
+          isOpen={showDriveModal}
+          onClose={() => setShowDriveModal(false)}
+          onImportMaps={async (newMaps) => {
+            const updatedCarto = [...data.cartography, ...newMaps];
+            await savePortfolio({ ...data, cartography: updatedCarto });
+            showFeedback(`🎉 ${newMaps.length} cartes importées avec succès dans la cartothèque !`, 'success');
+          }}
+        />
       )}
 
     </div>

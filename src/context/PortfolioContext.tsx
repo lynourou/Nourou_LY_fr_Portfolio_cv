@@ -9,11 +9,20 @@ import {
   FieldworkItem,
   CartoItem,
   EducationItem,
+  AcademicDocument,
   ContactData,
   AnalyticsSummary,
 } from '../types/portfolio';
 import { initialPortfolioData } from '../data/portfolioData';
-import { persistPortfolioData, retrievePortfolioData } from '../utils/storage';
+import { 
+  persistPortfolioData, 
+  retrievePortfolioData, 
+  computeSha256, 
+  verifyAdminPassword, 
+  ADMIN_PWD_HASH_KEY,
+  LOCAL_STORAGE_KEY,
+  sanitizeAndMergePortfolioData,
+} from '../utils/storage';
 
 interface PortfolioContextType {
   data: PortfolioData;
@@ -52,6 +61,9 @@ interface PortfolioContextType {
   // Formation
   saveEducation: (education: EducationItem) => Promise<boolean>;
   deleteEducation: (educationId: string) => Promise<boolean>;
+  // Documents & Mémoires
+  saveDocument: (document: AcademicDocument) => Promise<boolean>;
+  deleteDocument: (documentId: string) => Promise<boolean>;
   // Statistiques d'utilisation & engagement
   trackEvent: (type: string, targetId?: string, label?: string, category?: string) => Promise<void>;
   getAnalytics: () => Promise<AnalyticsSummary | null>;
@@ -71,9 +83,9 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
   const [data, setData] = useState<PortfolioData>(() => {
     // Initialiser avec les données en cache local si présentes
     try {
-      const cached = localStorage.getItem(PORTFOLIO_STORAGE_KEY);
+      const cached = localStorage.getItem(LOCAL_STORAGE_KEY) || localStorage.getItem(PORTFOLIO_STORAGE_KEY);
       if (cached) {
-        return JSON.parse(cached);
+        return sanitizeAndMergePortfolioData(JSON.parse(cached));
       }
     } catch {
       // ignorer
@@ -89,14 +101,8 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
     const token = sessionStorage.getItem(ADMIN_TOKEN_KEY) || localStorage.getItem(ADMIN_TOKEN_KEY);
     return !!token;
   });
-  const [isPasswordConfigured, setIsPasswordConfigured] = useState<boolean>(() => {
-    const existing = localStorage.getItem(ADMIN_PWD_KEY);
-    if (existing && ['nourou2026!', 'geomaticien2026', 'Nourou2026!'].includes(existing)) {
-      localStorage.removeItem(ADMIN_PWD_KEY);
-      return false;
-    }
-    return Boolean(existing);
-  });
+  // L'espace d'administration est TOUJOURS protégé par mot de passe (aucun visiteur ne peut créer/écraser le mot de passe)
+  const [isPasswordConfigured, setIsPasswordConfigured] = useState<boolean>(true);
 
   // Charger les données du portfolio (depuis l'API serveur ou stockage robuste IndexedDB/localStorage/portfolio-data.json)
   const refreshData = useCallback(async () => {
@@ -104,8 +110,9 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
       const res = await fetch('/api/portfolio');
       if (res.ok) {
         const json = await res.json();
-        setData(json);
-        await persistPortfolioData(json);
+        const merged = sanitizeAndMergePortfolioData(json);
+        setData(merged);
+        await persistPortfolioData(merged);
         return;
       }
     } catch {
@@ -114,7 +121,7 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     try {
       const stored = await retrievePortfolioData();
-      setData(stored);
+      setData(sanitizeAndMergePortfolioData(stored));
     } catch {
       setData(initialPortfolioData);
     } finally {
@@ -177,11 +184,11 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
     checkAuthStatus();
   }, [refreshData, checkAuthStatus]);
 
-  // Connexion administrateur hybride (Serveur avec repli autonome GitHub Pages)
+  // Connexion administrateur hybride sécurisée (Serveur + Détection cryptographique SHA-256)
   const login = async (password: string): Promise<{ success: boolean; error?: string }> => {
     const trimmedInput = (password || '').trim();
     if (!trimmedInput) {
-      return { success: false, error: 'Veuillez saisir votre mot de passe.' };
+      return { success: false, error: 'Veuillez saisir votre mot de passe administrateur.' };
     }
 
     // 1. Tenter l'API serveur si elle répond
@@ -203,23 +210,15 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
         }
       } else if (res.status === 401) {
         const json = await res.json().catch(() => ({}));
-        return { success: false, error: json.error || 'Mot de passe incorrect.' };
+        return { success: false, error: json.error || 'Mot de passe administrateur incorrect.' };
       }
     } catch {
       // Le serveur n'est pas actif (hébergement statique GitHub Pages)
     }
 
-    // 2. Mode autonome sécurisé (GitHub Pages)
-    const savedCustomPassword = localStorage.getItem(ADMIN_PWD_KEY);
-    if (!savedCustomPassword) {
-      setIsPasswordConfigured(false);
-      return {
-        success: false,
-        error: 'Aucun mot de passe configuré. Veuillez créer votre mot de passe administrateur.',
-      };
-    }
-
-    if (savedCustomPassword === trimmedInput) {
+    // 2. Mode autonome sécurisé GitHub Pages (Vérification cryptographique SHA-256 stricte)
+    const isValid = await verifyAdminPassword(trimmedInput, data.adminPasswordHash);
+    if (isValid) {
       const staticToken = 'static-admin-' + Date.now() + '-' + Math.random().toString(36).substring(2);
       localStorage.setItem(ADMIN_TOKEN_KEY, staticToken);
       sessionStorage.setItem(ADMIN_TOKEN_KEY, staticToken);
@@ -230,44 +229,8 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     return { 
       success: false, 
-      error: 'Mot de passe incorrect.' 
+      error: 'Mot de passe administrateur incorrect. Accès refusé.' 
     };
-  };
-
-  // Configuration initiale d'un nouveau mot de passe personnalisé
-  const setupInitialPassword = async (newPassword: string): Promise<{ success: boolean; error?: string }> => {
-    const trimmed = (newPassword || '').trim();
-    if (!trimmed || trimmed.length < 6) {
-      return { success: false, error: 'Le mot de passe doit comporter au moins 6 caractères.' };
-    }
-
-    localStorage.setItem(ADMIN_PWD_KEY, trimmed);
-    setIsPasswordConfigured(true);
-
-    let serverToken: string | null = null;
-    try {
-      const res = await fetch('/api/admin/setup-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: trimmed }),
-      });
-      if (res.ok) {
-        const json = await res.json();
-        if (json.token) {
-          serverToken = json.token;
-        }
-      }
-    } catch {
-      // Hébergement statique
-    }
-
-    const staticToken = serverToken || ('static-admin-' + Date.now() + '-' + Math.random().toString(36).substring(2));
-    localStorage.setItem(ADMIN_TOKEN_KEY, staticToken);
-    sessionStorage.setItem(ADMIN_TOKEN_KEY, staticToken);
-    setAdminToken(staticToken);
-    setIsAdmin(true);
-
-    return { success: true };
   };
 
   // Déconnexion administrateur
@@ -288,9 +251,8 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
     setIsAdmin(false);
   };
 
-  // Modifier le mot de passe administrateur
+  // Modifier le mot de passe administrateur (réservé exclusivement à l'administrateur authentifié)
   const changeAdminPassword = async (currentPassword: string, newPassword: string) => {
-    const savedCustomPassword = localStorage.getItem(ADMIN_PWD_KEY);
     const trimmedCurrent = (currentPassword || '').trim();
     const trimmedNew = (newPassword || '').trim();
 
@@ -298,12 +260,20 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
       return { success: false, error: 'Le nouveau mot de passe doit comporter au moins 6 caractères.' };
     }
 
-    if (savedCustomPassword && savedCustomPassword !== trimmedCurrent) {
+    // Vérifier cryptographiquement le mot de passe actuel
+    const isCurrentValid = await verifyAdminPassword(trimmedCurrent, data.adminPasswordHash);
+    if (!isCurrentValid) {
       return { success: false, error: 'Mot de passe actuel incorrect.' };
     }
 
+    // Calcul de la nouvelle empreinte SHA-256
+    const newHash = await computeSha256(trimmedNew);
+    localStorage.setItem(ADMIN_PWD_HASH_KEY, newHash);
     localStorage.setItem(ADMIN_PWD_KEY, trimmedNew);
-    setIsPasswordConfigured(true);
+
+    // Mettre à jour dans les données globales du portfolio pour persistance multi-appareils
+    const updatedData = { ...data, adminPasswordHash: newHash };
+    await savePortfolio(updatedData);
 
     if (adminToken && !adminToken.startsWith('static-admin-')) {
       try {
@@ -317,7 +287,7 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
         });
         if (!res.ok) {
           const json = await res.json().catch(() => ({}));
-          return { success: false, error: json.error || 'Erreur lors de la mise à jour.' };
+          return { success: false, error: json.error || 'Erreur lors de la mise à jour sur le serveur.' };
         }
       } catch {
         // ignorer
@@ -327,14 +297,14 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
     return { success: true };
   };
 
-  // Réinitialiser le mot de passe (permet d'en recréer un nouveau)
+  // Configuration initiale si nécessaire (protégée)
+  const setupInitialPassword = async (newPassword: string): Promise<{ success: boolean; error?: string }> => {
+    return changeAdminPassword('', newPassword);
+  };
+
+  // Déconnexion de l'administrateur sans compromettre le mot de passe existant
   const resetAdminPassword = () => {
-    localStorage.removeItem(ADMIN_PWD_KEY);
-    setIsPasswordConfigured(false);
-    sessionStorage.removeItem(ADMIN_TOKEN_KEY);
-    localStorage.removeItem(ADMIN_TOKEN_KEY);
-    setAdminToken(null);
-    setIsAdmin(false);
+    logout();
   };
 
   // Sauvegarder les données de façon sécurisée (Serveur + Cache local synchrone + IndexedDB)
@@ -480,6 +450,23 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
   const deleteEducation = async (educationId: string) => {
     const education = data.education.filter((e) => e.id !== educationId);
     const res = await savePortfolio({ ...data, education });
+    return res.success;
+  };
+
+  const saveDocument = async (document: AcademicDocument) => {
+    const currentDocs = data.documents || [];
+    const exists = currentDocs.some((d) => d.id === document.id);
+    const updatedDocs = exists
+      ? currentDocs.map((d) => (d.id === document.id ? document : d))
+      : [document, ...currentDocs];
+    const res = await savePortfolio({ ...data, documents: updatedDocs });
+    return res.success;
+  };
+
+  const deleteDocument = async (documentId: string) => {
+    const currentDocs = data.documents || [];
+    const updatedDocs = currentDocs.filter((d) => d.id !== documentId);
+    const res = await savePortfolio({ ...data, documents: updatedDocs });
     return res.success;
   };
 
@@ -698,6 +685,8 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
         saveSkills,
         saveEducation,
         deleteEducation,
+        saveDocument,
+        deleteDocument,
         trackEvent,
         getAnalytics,
         resetAnalytics,
