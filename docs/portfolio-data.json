@@ -550,7 +550,13 @@
       "institution": "CEDT Le G15 (Centre d'Entrepreneuriat et de Développement Technique)",
       "location": "Dakar, Sénégal",
       "period": "2024 – 2026 (Obtenu en 2026, soutenance le 20 juillet 2026)",
-      "description": "Formation supérieure spécialisée en sciences géomatiques : systèmes d'information géographique, cartographie numérique, topographie, géodésie, télédétection, photogrammétrie, bases de données spatiales, programmation appliquée à la géomatique, WebSIG et analyses spatiales. Travail de fin d'études (136 pages, 9 mois) : « Apport de la géomatique à la gestion de la forêt classée de Mbao »."
+      "description": "Formation supérieure spécialisée en sciences géomatiques : systèmes d'information géographique, cartographie numérique, topographie, géodésie, télédétection, photogrammétrie, bases de données spatiales, programmation appliquée à la géomatique, WebSIG et analyses spatiales. Travail de fin d'études (136 pages, 9 mois) : « Apport de la géomatique à la gestion de la forêt classée de Mbao ».",
+      "documents": [
+        {
+          "title": "Mémoire de fin d'études BTS Géomatique : « Apport de la géomatique à la gestion de la forêt classée de Mbao » (136 pages)",
+          "url": "./memoire-bts-mbao.pdf"
+        }
+      ]
     },
     {
       "id": "edu-bts-metallurgie",
@@ -583,5 +589,9 @@
     "linkedin": "https://www.linkedin.com/in/nourou-ly",
     "github": "",
     "location": "Sénégal"
+  },
+  "notificationConfig": {
+    "emailNotificationsEnabled": true,
+    "notifyEmail": "lynourou12@gmail.com"
   }
 }
