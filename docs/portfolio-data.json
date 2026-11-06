@@ -6,7 +6,7 @@
     "location": "Sénégal",
     "availability": "Disponible pour opportunités professionnelles",
     "avatarUrl": "",
-    "cvPdfUrl": "./cv.pdf"
+    "cvPdfUrl": "/cv.pdf"
   },
   "about": {
     "journey": "Diplômé d'un BTS en Géomatique au CEDT Le G15 en 2026, mon parcours s'est résolument orienté vers les sciences de l'information géographique, l'analyse spatiale et la gestion environnementale. Mon parcours a débuté par une solide formation technique en métallurgie, mécanique des métaux et génie industriel, avant d'évoluer de manière progressive et cohérente vers la géomatique : métallurgie et travail des métaux → formation technique → génie industriel → géomatique → SIG et cartographie → télédétection → collecte de données terrain → foresterie et environnement → bases de données spatiales → webmapping et applications mobiles géographiques.",
@@ -583,6 +583,5 @@
     "linkedin": "https://www.linkedin.com/in/nourou-ly",
     "github": "",
     "location": "Sénégal"
-  },
-  "adminPasswordHash": "a88b619952ff1d935e8f46bc15513ead94dac4ddf983f2ff5c70b5c2ac3249bb"
+  }
 }
